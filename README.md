@@ -136,7 +136,9 @@ and actual upstream licenses are recorded in [licensing](docs/licensing.md) and
 dedicated-server smoke test, GPG signing, and Forgejo release publication after
 asset-inventory and server-reported-size checks. Remote release assets are not downloaded
 by the publisher. Repository secrets `CI_KEY_B64` and `CI_KEY_PASSPHRASE` are required
-only for that tag-release step; ordinary builds never access them.
+only for that tag-release step; ordinary builds never access them. If a tag publication stops
+after staging a draft, use the separate Recover signed release workflow with that tag and
+the original tag-run API ID; it reuses the original tested artifacts without retagging.
 
 
 Version: **0.0.1**. Creator: **FireBADnoFire**.

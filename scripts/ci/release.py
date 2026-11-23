@@ -104,7 +104,18 @@ def main():
     require(commit == record['commit'], 'Staged artifact was not built from the checked-out commit')
     api = API(os.environ.get('RELEASE_TOKEN'))
     tag_info = api.repo('GET', '/tags/' + urllib.parse.quote(tag, safe=''), missing=True)
-    require(tag_info is not None and tag_info['commit']['sha'] == commit, 'Remote release tag does not match checked-out commit')
+    require(tag_info is not None, 'Remote release tag does not exist')
+    tagged_commit = tag_info['commit']['sha']
+    require(re.fullmatch(r'[0-9a-f]{40}', tagged_commit), 'Remote release tag has an invalid commit')
+    if os.environ.get('RECOVERY_RUN_ID'):
+        require(os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch',
+                'Recovery requires a manual workflow dispatch')
+        require(record['commit'] == tagged_commit, 'Recovered artifact does not match the release tag')
+        main_commit = subprocess.check_output(['git', 'rev-parse', 'refs/remotes/origin/main'], text=True).strip()
+        require(commit == main_commit, 'Recovery checkout is not current main')
+    else:
+        require(tagged_commit == commit == record['commit'],
+                'Release tag, checkout, and staged artifact must match')
     title, body = 'Storage Tweaks ' + tag, notes(record, tag)
     release = api.repo('GET', '/releases/tags/' + urllib.parse.quote(tag, safe=''), missing=True)
     if release is None:

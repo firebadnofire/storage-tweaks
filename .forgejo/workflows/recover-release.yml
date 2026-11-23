@@ -1,0 +1,54 @@
+name: Recover signed release from original tested artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v* or V* tag to finish publishing'
+        type: string
+        required: true
+      run_id:
+        description: 'API run ID of the original tag workflow'
+        type: string
+        required: true
+
+jobs:
+  recover:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    container:
+      image: node:24-bookworm@sha256:9d266751ca3d7fdbe651c878ffd5ad0a42fed49a18c283509267c97f025b7496
+    timeout-minutes: 20
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      RECOVERY_RUN_ID: ${{ inputs.run_id }}
+    steps:
+      - run: |
+          set -eu
+          apt-get update
+          apt-get install --yes --no-install-recommends git python3 gnupg ca-certificates
+      - uses: https://data.forgejo.org/actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Validate publisher and recovery safeguards
+        run: python3 -m unittest discover -s scripts/ci/tests -v
+      - name: Recover original tagged build evidence
+        env:
+          RELEASE_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/recover.py
+      - name: Sign and verify the original artifacts
+        env:
+          CI_KEY_B64: ${{ secrets.CI_KEY_B64 }}
+          CI_KEY_PASSPHRASE: ${{ secrets.CI_KEY_PASSPHRASE }}
+        run: bash scripts/ci/sign.sh
+      - name: Complete the draft release
+        env:
+          RELEASE_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/publish.sh
+      - name: Retain recovery evidence
+        if: always()
+        uses: https://data.forgejo.org/actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5
+        with:
+          name: release-recovery-evidence
+          path: ci-dist/
+          if-no-files-found: warn
