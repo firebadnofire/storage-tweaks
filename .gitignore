@@ -8,3 +8,5 @@ validation-local/
 /validation-*.log
 /forge-installer-*.jar.log
 /dist/
+/ci-dist/
+__pycache__/

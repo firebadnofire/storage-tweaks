@@ -160,9 +160,12 @@ Unexpected GUI and delayed contents, nested-content bounds, latency,
 death/disconnect interruptions, broader contention scenarios, GUI scales,
 and representative modpack gameplay need more
 runtime coverage. No third-party protection integration exists yet. Real
-clientcommands coexistence requires a compatible distribution. CI configuration
-is not a hosted CI result. Ports must follow the required 1.12.2 validation gates;
-none is advertised as implemented or verified yet.
+clientcommands coexistence requires a compatible distribution. The Forgejo workflow
+builds and inspects the exact release binary, signs it only after a passing
+dedicated-server smoke test, and publishes only pushed `v*`/`V*` tags. A workflow
+run is build/startup evidence, not a replacement for the required gameplay gates.
+Ports must follow the required 1.12.2 validation gates; none is advertised as
+implemented or verified yet.
 
 ## Pack diagnosis
 

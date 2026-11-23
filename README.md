@@ -132,7 +132,10 @@ the private test harness uses official Forge binaries for runtime validation.
 
 AGPL-3.0-or-later, preserving the existing project license. Reference provenance
 and actual upstream licenses are recorded in [licensing](docs/licensing.md) and
-[NOTICE](NOTICE). No releases are published automatically.
+[NOTICE](NOTICE). A pushed `v*`/`V*` tag runs the pinned Java 8 build, exact-JAR
+dedicated-server smoke test, GPG signing, and verified Forgejo release publication.
+Repository secrets `CI_KEY_B64` and `CI_KEY_PASSPHRASE` are required only for that
+tag-release step; ordinary builds never access them.
 
 
 Version: **0.0.1**. Creator: **FireBADnoFire**.
