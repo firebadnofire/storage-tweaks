@@ -1,0 +1,2 @@
+rootProject.name = 'storage-tweaks'
+include 'common', 'forge-1.12.2'

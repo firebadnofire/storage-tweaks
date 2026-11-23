@@ -1,0 +1,157 @@
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net/' }
+        mavenCentral()
+    }
+    dependencies { classpath 'net.minecraftforge.gradle:ForgeGradle:3.0.197' }
+}
+apply plugin: 'net.minecraftforge.gradle'
+sourceCompatibility = targetCompatibility = '1.8'
+archivesBaseName = 'firebadnofire-storage-tweaks'
+minecraft {
+    mappings channel: 'stable', version: '39-1.12'
+    runs {
+        client { workingDirectory project.file('run') }
+        server { workingDirectory project.file('run-server') }
+    }
+}
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2864'
+    implementation project(':common')
+    testImplementation 'junit:junit:4.13.2'
+    // Newer MergeTool annotation stubs introduce Side.BUKKIT, which crashes 1.12 FML.
+    // Pin the annotation dependency; this does not repair the MCP merged development JAR.
+    // productionClient uses the official universal JAR. Never patch or ship Forge's Side class.
+    implementation('net.minecraftforge:mergetool:0.2.3.3:forge') { force = true }
+}
+configurations.all {
+    resolutionStrategy.force 'net.minecraftforge:mergetool:0.2.3.3', 'net.minecraftforge:legacydev:0.2.3.1'
+}
+jar {
+    from project(':common').sourceSets.main.output
+    from(rootProject.file('LICENSE'))
+    from(rootProject.file('NOTICE'))
+    archiveName = "${archivesBaseName}-${version}-mc1.12.2-forge.jar"
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+jar.finalizedBy('reobfJar')
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    archiveName = "${archivesBaseName}-${version}-mc1.12.2-forge-sources.jar"
+    from sourceSets.main.allSource
+    from project(':common').sourceSets.main.allSource
+    from(rootProject.file('LICENSE'))
+    from(rootProject.file('NOTICE'))
+}
+artifacts { archives sourcesJar }
+
+// Development-only tests are kept out of every distribution artifact.
+sourceSets {
+    baselineTest {
+        java.srcDir 'src/baselineTest/java'
+        compileClasspath += sourceSets.main.compileClasspath
+    }
+    runtimeTest {
+        java.srcDir 'src/runtimeTest/java'
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
+}
+tasks.matching { it.name == 'runClient' }.all {
+    if (project.hasProperty('runtimeTest')) {
+        dependsOn runtimeTestClasses
+        classpath += sourceSets.runtimeTest.output
+        systemProperty 'storageTweaks.runtimeTest', 'true'
+    }
+}
+
+configurations { productionMinecraft; productionForge; productionAsm }
+
+// Read-only launch inputs for the isolated Linux/Xvfb fixture runner.
+task exportProductionRuntime(dependsOn: ['jar', 'reobfJar', 'runtimeTestJar', 'reobfRuntimeTestJar', 'baselineTestJar', 'reobfBaselineTestJar']) {
+    doLast {
+        def libraries = sourceSets.main.runtimeClasspath.filter {
+            !it.absolutePath.startsWith(buildDir.absolutePath) &&
+            !it.absolutePath.startsWith(project(':common').buildDir.absolutePath) &&
+            !it.name.contains('_mapped_') && !it.name.startsWith('asm-')
+        }
+        def output = [classpath: files(configurations.productionForge, configurations.productionMinecraft,
+            configurations.productionAsm, libraries).files.collect { it.absolutePath },
+            assets: new File(gradle.gradleUserHomeDir, 'caches/forge_gradle/assets').absolutePath,
+            mod: jar.archivePath.absolutePath, fixture: runtimeTestJar.archivePath.absolutePath,
+            baseline: baselineTestJar.archivePath.absolutePath]
+        file('build/production-runtime.json').text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(output))
+    }
+}
+dependencies {
+    productionMinecraft('net.minecraft:client:1.12.2') { transitive = false }
+    productionForge('net.minecraftforge:forge:1.12.2-14.23.5.2864:universal') { transitive = false }
+    // Match the official Forge installer runtime, rather than FG3's ASM 6 build tools.
+    productionAsm('org.ow2.asm:asm-debug-all:5.2') { transitive = false }
+}
+task runtimeTestJar(type: Jar, dependsOn: runtimeTestClasses) {
+    classifier = 'runtime-tests'
+    from sourceSets.runtimeTest.output
+}
+reobf { runtimeTestJar {} }
+task baselineTestJar(type: Jar, dependsOn: baselineTestClasses) {
+    classifier = 'baseline-tests'
+    from sourceSets.baselineTest.output
+}
+reobf { baselineTestJar {} }
+
+// Test the distributable binary with unmodified Forge, avoiding FG3's broken merged dev Side enum.
+task productionClient(type: JavaExec, dependsOn: ['jar', 'reobfJar', 'runtimeTestJar', 'reobfRuntimeTestJar', 'baselineTestJar', 'reobfBaselineTestJar', 'extractNatives', 'downloadAssets']) {
+    main = 'net.minecraft.launchwrapper.Launch'
+    workingDir = file(project.findProperty('runtimeMode') == 'baseline' ? 'build/production-pack-baseline' : project.findProperty('runtimeMode') == 'pack' ? 'build/production-pack' : 'build/production-client')
+    if(project.hasProperty('runtimeInstance')) {
+        def instanceName=project.property('runtimeInstance').toString()
+        if(!(instanceName ==~ /[a-zA-Z0-9_-]+/)) throw new GradleException('runtimeInstance must be a simple directory name')
+        workingDir=file('build/'+instanceName)
+    }
+    maxHeapSize = project.hasProperty('runtimePack') ? '6G' : '2G'
+    systemProperty 'java.io.tmpdir', new File(workingDir, 'tmp').absolutePath
+    systemProperty 'storageTweaks.runtimeTest', project.findProperty('runtimeMode') == 'manual' ? 'false' : 'true'
+    systemProperty 'storageTweaks.runtimeMode', project.findProperty('runtimeMode') ?: 'integrated'
+    systemProperty 'java.library.path', extractNatives.output.absolutePath
+    doFirst {
+        workingDir.mkdirs()
+        new File(workingDir, 'tmp').mkdirs()
+        def optionsFile=new File(workingDir, 'options.txt')
+        def options=optionsFile.exists() ? optionsFile.readLines('UTF-8').findAll { !it.startsWith('soundCategory_master:') } : []
+        options.add('soundCategory_master:0.0')
+        optionsFile.setText(options.join('\n')+'\n', 'UTF-8')
+        if (project.findProperty('runtimeMode') in ['pack', 'baseline']) {
+            if (!project.hasProperty('runtimePack')) throw new GradleException('Pass -PruntimePack=<read-only reference instance> for pack tests')
+            def reference = file(project.property('runtimePack'))
+            if (!new File(reference, 'mods').isDirectory()) throw new GradleException('Reference instance has no mods directory')
+            copy { from new File(reference, 'mods'); include '*.jar'; into new File(workingDir, 'mods') }
+            copy { from new File(reference, 'config'); into new File(workingDir, 'config') }
+            copy { from new File(reference, 'Flan'); into new File(workingDir, 'Flan') }
+        }
+        if(project.findProperty('runtimeMode') == 'baseline') {
+            copy { from baselineTestJar.archivePath; into new File(workingDir, 'mods') }
+        } else {
+            copy {
+                from jar.archivePath
+                if(project.findProperty('runtimeMode') != 'manual') from runtimeTestJar.archivePath
+                into new File(workingDir, 'mods')
+            }
+        }
+        def libraries = sourceSets.main.runtimeClasspath.filter {
+            !it.absolutePath.startsWith(buildDir.absolutePath) &&
+            !it.absolutePath.startsWith(project(':common').buildDir.absolutePath) &&
+            !it.name.contains('_mapped_') && !it.name.startsWith('asm-')
+        }
+        classpath = files(configurations.productionForge, configurations.productionMinecraft, configurations.productionAsm, libraries)
+        def testName=(project.findProperty('runtimeName') ?: 'StorageTest').toString()
+        if(!(testName ==~ /[A-Za-z0-9_]{1,16}/)) throw new GradleException('runtimeName must be a valid offline test username')
+        args '--username', testName, '--version', '1.12.2', '--gameDir', workingDir.absolutePath,
+            '--assetsDir', new File(gradle.gradleUserHomeDir, 'caches/forge_gradle/assets').absolutePath,
+            '--assetIndex', '1.12', '--accessToken', '0', '--userProperties', '{}',
+            '--tweakClass', 'net.minecraftforge.fml.common.launcher.FMLTweaker'
+    }
+}

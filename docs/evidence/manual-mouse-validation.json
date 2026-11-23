@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-22",
+  "target": "Minecraft 1.12.2 / Forge 14.23.5.2864",
+  "display": "Windows main monitor",
+  "masterVolume": 0,
+  "joinMethod": "Minecraft Multiplayer LAN discovery row",
+  "reproduction": {
+    "log": "validation-manual-lan-host-retry.log",
+    "time": "21:06:57",
+    "failure": "Real Take click sent slot -999 THROW before PICKUP; job aborted with cursor preserved"
+  },
+  "fixed": {
+    "timeTake": "21:12:24",
+    "timeStore": "21:12:33",
+    "clientLog": "validation-manual-client-fixed.log",
+    "serverLog": "validation-manual-lan-host-retry.log",
+    "clicks": "Real Windows mouse press/release",
+    "initialChest": {
+      "apple": 28,
+      "stone": 20
+    },
+    "initialPlayer": {
+      "stone": 10
+    },
+    "afterTakePlayer": {
+      "apple": 28,
+      "stone": 30
+    },
+    "afterStoreChest": {
+      "apple": 28,
+      "stone": 30
+    },
+    "afterStorePlayer": "empty",
+    "cursor": "empty",
+    "screen": "same chest remained open",
+    "packets": "8 legal PICKUP packets, actions 1-8; no slot -999"
+  },
+  "creative": {
+    "log": "validation-manual-lan-creative.log",
+    "deposited": [
+      10,
+      30
+    ],
+    "firstClickEach": true,
+    "chestIntact": true,
+    "openedScreen": false,
+    "realChestSortPassed": true,
+    "ordinarySlotClicksPassed": true,
+    "limitation": "Reported creative lag not reproduced by two paced clicks; rapid targeting/jitter unverified"
+  },
+  "build": {
+    "command": ".\\scripts\\Validate.ps1",
+    "log": "validation-manual-fix-build.log",
+    "exit": 0,
+    "tests": "common:test and forge-1.12.2:test; current results reused on final build",
+    "packaging": "Distribution/source artifacts inspected for fixture and Forge implementation classes"
+  },
+  "artifact": {
+    "path": "dist/firebadnofire-storage-tweaks-0.1.0-dev-mc1.12.2-forge.jar",
+    "sha256": "437533d6a5afd7f706752bd8f12a18c51917822f4405f46121da1d7d28af6db4",
+    "source": "Exact binary used in the mouse-tested remote client",
+    "rebuiltJarContent": "All uncompressed ZIP entries equal; archive hashes differ after ForgeGradle reobfuscation"
+  }
+}

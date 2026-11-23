@@ -1,0 +1,167 @@
+{
+  "source": "User-provided mods.tzs",
+  "archiveSha256": "9e7af621d9296b1217a1ab7851bea7b856220bf1411890ad843001a4a03ce66d",
+  "minecraft": "1.12.2",
+  "forge": "14.23.5.2864",
+  "java": "8u472",
+  "configuration": "Generated defaults; archive contains mods only",
+  "status": "gameplay tested for stated harness scope; ALL PACK RUNTIME TESTS PASSED on 2026-11-22",
+  "mods": [
+    {
+      "name": "-configanytime-3.0.jar",
+      "sha256": "29fe190f0d1bb0b3841b2b9f315a5d561cab9f587df6164a0205440540577575"
+    },
+    {
+      "name": "-mixinbooter-12.5.jar",
+      "sha256": "933c527a140eac9a9f52b18d6acc80ab908de6368684c6295295c49305d940e5"
+    },
+    {
+      "name": "[1.12.2]DamageIndicatorsMod-3.5.1.jar",
+      "sha256": "4150b8b73313c9134ab412e935e6c3d9b3def3e18e84c7f5dd105f95e428b808"
+    },
+    {
+      "name": "AppleSkin-mc1.12-1.0.14.jar",
+      "sha256": "4bbd37edecff0b420ab0eea166b5d7b4b41a9870bfb8647bf243140dc57f101e"
+    },
+    {
+      "name": "baritone-api-forge-1.2.19-srg.jar",
+      "sha256": "fc219d900aeb5be8c0910b7eeab6fddfd42a6ea3ee156d65c65d473979cf2da4"
+    },
+    {
+      "name": "BetterAdvancements-1.12.2-0.1.0.77.jar",
+      "sha256": "c70cda15d9c76cc79423399c1002977d6dfcc229128b33b87f25d5b4238bea34"
+    },
+    {
+      "name": "BetterFps-1.4.8.jar",
+      "sha256": "93f2496bded8f622d31d7b4b634766166c8d52dfca6e21cd9f46c445a468a381"
+    },
+    {
+      "name": "CarbonConfig-1.12.2-2.0.2.1.jar",
+      "sha256": "1c435bd2eda5bfb4f9778301aab97091f0925c891edfae9dd6794f1dfe123482"
+    },
+    {
+      "name": "Chunk-Pregenerator-1.12.2-4.4.9.3.jar",
+      "sha256": "32161d8965e07f91a769cdf0325b368f7d2a4459af15abef165b57b91213b2bb"
+    },
+    {
+      "name": "Clumps-3.1.2.jar",
+      "sha256": "f3ce670e0087f4c6b770fd05ae5c3dfd8462f74c62397932ea72954d1c6c8df4"
+    },
+    {
+      "name": "Controlling-3.0.12.4.jar",
+      "sha256": "f5edd4793f96cd5a6f31aecbd3030093b367a51afba5d6f7281756d0f9c03786"
+    },
+    {
+      "name": "CraftTweaker2-1.12-4.1.20.718.jar",
+      "sha256": "05bae86d528274be285e8aeaf0e70cf8210662c81268846d272281b932e39f97"
+    },
+    {
+      "name": "dronesmc-0.0.3.jar",
+      "sha256": "1cff43b561b1f3dbbbc40a29865a6045831a2f4da1df05acb49a42d873146de3"
+    },
+    {
+      "name": "entityculling-1.12.2-1.6.3.jar",
+      "sha256": "1b44014b44cef0e31b6fc618fb195ba110db11dcebb0952e0877492b4cb2d478"
+    },
+    {
+      "name": "FastWorkbench-1.12.2-1.7.4.jar",
+      "sha256": "db86c2c728c148ff20e4349fa18767853326ec78e6581afb0c38954fe2abf42a"
+    },
+    {
+      "name": "Flan's Mod-1.12.2-5.10.0.jar",
+      "sha256": "252f602ae4bd0ebe5dfdf3ae2c314f2a5a112f12809053a17f8f00d3c2047ec3"
+    },
+    {
+      "name": "forgeessentials-1.12.2-12.5.1-client.jar",
+      "sha256": "ec71687fabb56a39d3255a8b9afa5c599c57d129e3e486ef060609e5675abb45"
+    },
+    {
+      "name": "iChunUtil-1.12.2-7.2.2.jar",
+      "sha256": "e0b90727cbe54a11fe568f3d60cd59d64ff3c14f82437e1d1c10b575886ab8a3"
+    },
+    {
+      "name": "ironchest-1.12.2-7.0.72.847.jar",
+      "sha256": "29d3a4115d67b83eb542b618eb64db40db23a7f009a0f4dc9a396101d6f8491f"
+    },
+    {
+      "name": "jei_1.12.2-4.24.0.1042.jar",
+      "sha256": "84c87f5455d2c18a470c22adabe9757511ec012651aa02a3714a42241b16abed"
+    },
+    {
+      "name": "litematica-forge-1.12.2-0.0.0-dev.20191217.195055.jar",
+      "sha256": "fb830f1b1cdb5deb9c70c73e7cf2f1d1654f841b77856d83057c3e4aff17e862"
+    },
+    {
+      "name": "malilib-forge-1.12.2-0.10.0-dev.23.nomixin.jar",
+      "sha256": "24276028ea555f663225b8cbd4493fa3ad077a7703c5ee89ece54af0afa725c9"
+    },
+    {
+      "name": "Mantle-1.12-1.3.3.55.jar",
+      "sha256": "0975ad3ef3b8b35fe43461feabe44d406b5521b0a2f3d1965c8d2f6a59ad2e65"
+    },
+    {
+      "name": "ModifierKeyFix-1.0-1.12.2.jar",
+      "sha256": "fbb6cc49f90ad359da90fe43a986de444c1d80f6b09d214a933e3657053d29c9"
+    },
+    {
+      "name": "MouseTweaks-2.10.1-mc1.12.2.jar",
+      "sha256": "5e13315f4e0d0c96b1f9b800a42fecb89f519aca81d556c91df617c8751aa575"
+    },
+    {
+      "name": "OpenComputers-MC1.12.2-1.8.10+258943363.jar",
+      "sha256": "9ba075d1bbdebe0c253bd6594deedcb81cdec3158ec7afc6c76ff8f5986c6816"
+    },
+    {
+      "name": "OptiFine_1.12.2_HD_U_G5.jar",
+      "sha256": "3b0006797771feb97f2d0d2908ae7c9a78cefb2e730af1c2e85d08a839ba271e"
+    },
+    {
+      "name": "OreExcavation-1.4.150.jar",
+      "sha256": "535c5a8e2d708fa810687698425f982f16c326c0cc91fa5eec08194d65ef2c28"
+    },
+    {
+      "name": "Placebo-1.12.2-1.6.1.jar",
+      "sha256": "6fe241d316a61314aad22ab80664a1741a2c8f1b2368d73723b62ecc41dfeb0f"
+    },
+    {
+      "name": "PortalGun-1.12.2-7.1.0.jar",
+      "sha256": "167888d06f892853cb39890ceeb47f51c5345ea644b342c37a4fefebafcb8300"
+    },
+    {
+      "name": "Sync-1.12.2-7.1.0.jar",
+      "sha256": "55375da764256f380c0dc95d2827b741de42ea5007cbe0d521ce079e66f5d88f"
+    },
+    {
+      "name": "TConstruct-1.12.2-2.13.0.183.jar",
+      "sha256": "707107f746ffc9d2bf35912953ae1ce780f7b7c4b7cf86b4821a1a151bcf9f6f"
+    },
+    {
+      "name": "theoneprobe-1.12-1.4.28.jar",
+      "sha256": "f3e5048dbe58f37f98f8130886ede880ac5b3333ee73cae2381c337e500c4bd1"
+    },
+    {
+      "name": "TravelersBackpack-1.12.2-1.0.35.jar",
+      "sha256": "39a7914b5a55b7d5ad5d1192c38a66b926895317e0426a359a529de2f8028581"
+    },
+    {
+      "name": "vintagefix-0.7.2.jar",
+      "sha256": "33a16df8fe94bb625a41bc20d7d3d4629b63c6a53e95119715db5e969982b65b"
+    },
+    {
+      "name": "xaerolib-forge-1.12.2-1.7.3.jar",
+      "sha256": "6c0cab56a6f56e94eff537f0fdfa6f6f69b9d651caf221e44a837027a6d9b1c0"
+    },
+    {
+      "name": "xaerominimap-forge-1.12.2-26.6.0.jar",
+      "sha256": "efb30f0904bb8e3744bb62f77ad4f7c9e7613e063aa9900498cbb5a6e1b6d882"
+    },
+    {
+      "name": "XaeroPlus-200+forge-1.12.2-WM1.47.0-MM26.6.0.jar",
+      "sha256": "94976977a8e974803a98503db386824723536e537c44d06775982861da482882"
+    },
+    {
+      "name": "xaeroworldmap-forge-1.12.2-1.47.0.jar",
+      "sha256": "a00a7d95dc8d19427d989d43968fea0d645b508fdc15bd568389e6b18bd17b6b"
+    }
+  ]
+}

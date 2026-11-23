@@ -1,0 +1,94 @@
+{
+  "failures": [
+    "Initial private chest-open fixture timing failure",
+    "Private nested fixture player outside reach; actual cause of displacement unestablished",
+    "Runtime harness used a WorldServer method absent in 1.12.2; corrected to verified WorldInfo API",
+    "Fixture chest-open failure during 11-second server stall; startup wait extended, server interaction diagnostics added, final private run passed"
+  ],
+  "contention": {
+    "chestDiamondsBefore": 63,
+    "savedPlayerCheck": "CONTENTION_PLAYER_COUNTS_PASSED:6,7",
+    "clients": 2,
+    "serverCheckResult": "Successfully found the block at 0, 4, 3",
+    "chestDiamondsAfter": 64,
+    "serverCheck": "testforblock 0 4 3 minecraft:chest 2 {Items:[{Slot:0b,id:\"minecraft:diamond\",Count:64b}]}",
+    "playerDiamondsAfter": [
+      7,
+      6
+    ],
+    "totalAfter": 77,
+    "totalBefore": 77,
+    "clientLogs": [
+      "validation-private-contention-A.log",
+      "validation-private-contention-B.log"
+    ],
+    "playerDiamondsBefore": [
+      7,
+      7
+    ]
+  },
+  "forge": "14.23.5.2864",
+  "remaining": [
+    "broader 1.12.2 runtime and protection scenarios",
+    "real clientcommands coexistence where available",
+    "1.8.9 and modern ports not started"
+  ],
+  "privateDisplay": {
+    "temporaryExecutableBytes": "3.5 MiB",
+    "newestRegression": "passed: ALL INTEGRATED RUNTIME TESTS PASSED",
+    "integratedPassedLog": "validation-private-client-retry.log",
+    "softwareWorkerThreads": 2,
+    "frameLimit": 30,
+    "backend": "WSL Ubuntu 24.04 / Xvfb",
+    "tcpListening": false,
+    "masterVolume": 0,
+    "rendering": "Mesa llvmpipe",
+    "hostPackageInstallation": false,
+    "display": ":99 (allocated per run)",
+    "newestLog": "validation-isolated-gui.log"
+  },
+  "minecraft": "1.12.2",
+  "build": {
+    "log": "validation-final-build.log",
+    "tests": 13,
+    "failures": 0,
+    "command": "scripts/Validate.ps1",
+    "exit": 0
+  },
+  "observed": "2026-11-22",
+  "optionalInstallation": {
+    "unmodifiedVanillaProtocolClient": "connection passed; not graphical gameplay",
+    "storageTweaksClientToVanilla": "game-client inventory/finder fixture passed in earlier session",
+    "optionalClientLog": "validation-private-optional.log",
+    "optionalClientMarker": "OPTIONAL_SERVER_JOIN_PASSED",
+    "absentStorageTweaksClientToModdedServer": "game-client connection passed"
+  },
+  "artifactSha256": "bf85b7c3e39b2be17be882f027c579332af389d90195d7d1e16b52a19ba57729",
+  "punchRestrictions": {
+    "fixtures": 12,
+    "scope": [
+      "equipment",
+      "locks",
+      "blocked storage",
+      "full storage",
+      "unloaded target without chunk load",
+      "double chest second-half capacity",
+      "double chest second-half access denial",
+      "ender chest access and capacity",
+      "unsupported shulker punch rejection"
+    ],
+    "log": "validation-private-punch-passed.log",
+    "result": "passed"
+  },
+  "cursorRecovery": {
+    "sameScreenPreserved": true,
+    "log": "validation-isolated-gui.log",
+    "initialContents": "withheld",
+    "playerInventory": "all 36 slots full",
+    "normalRecovery": "ordinary PICKUP click, both diamonds conserved",
+    "cursorDiamonds": 2,
+    "serverWindowPreserved": true,
+    "result": "passed",
+    "storageInventory": "all 27 slots full"
+  }
+}

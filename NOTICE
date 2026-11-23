@@ -1,0 +1,9 @@
+FireBADnoFire's Storage Tweaks
+Copyright (C) 2026 FireBADnoFire
+Licensed under the existing repository GNU AGPL v3-or-later notice; see LICENSE.
+
+Independent implementation inspired by Punch To Deposit by Shafi (MIT) and
+Earthcomputer's clientcommands (LGPL-3.0-or-later). No source or assets from those
+mods are bundled. Reference revisions and licensing boundaries: docs/licensing.md.
+
+Minecraft is a product of Mojang/Microsoft. Forge and Gradle are external tools.
