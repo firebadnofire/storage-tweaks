@@ -42,6 +42,19 @@ public final class RuntimeTestMod {
     private GuiContainer matched;
     private GuiContainer suppressed;
     private GuiContainer buttonScreen;
+    private float scanYaw,scanPitch;
+    private boolean earlyHotbarSwitch;
+    private int chestRowCase,chestSwapRepeat;
+    private boolean chestRowsTested;
+    private Snapshot chestRowInitial,chestRowExpected;
+    private int overrideCase;
+    private net.minecraft.client.settings.KeyBinding overrideBinding;
+    private org.firebadnofire.storagetweaks.inventory.Stack overrideOriginal;
+    private int rapidIndex;
+    private final AtomicInteger delayedProbeReplies=new AtomicInteger();
+    private int rowVariant;
+    private boolean rowsTested;
+    private List<ItemStack> rowExpected;
     private List<net.minecraft.client.gui.GuiButton> buttons;
     private volatile boolean allow=true;
     private volatile BlockPos deniedPosition;
@@ -60,6 +73,10 @@ public final class RuntimeTestMod {
         mc.gameSettings.setSoundLevel(net.minecraft.util.SoundCategory.MASTER,0F);
         PunchAccess.register("storage_tweaks_runtime_tests",(player,pos)->allow && !pos.equals(deniedPosition));
         MinecraftForge.EVENT_BUS.register(this);
+    }
+    @SubscribeEvent(priority=net.minecraftforge.fml.common.eventhandler.EventPriority.HIGH)
+    public void hotbarInputTiming(TickEvent.ClientTickEvent event) {
+        if(event.phase==TickEvent.Phase.END && earlyHotbarSwitch) { mc.player.inventory.currentItem=1;earlyHotbarSwitch=false; }
     }
     @SubscribeEvent public void tick(TickEvent.ClientTickEvent event) {
         if(event.phase!=TickEvent.Phase.END || failed) return;
@@ -87,7 +104,13 @@ public final class RuntimeTestMod {
                 for(int slot:ids) if(mc.player.openContainer.getSlot(slot).getSlotIndex()<9)
                     require(snapshot.slots.get(slot).equals(hotbar.get(mc.player.openContainer.getSlot(slot).getSlotIndex())),"Intermediate hotbar write");
             }
+            if(mode.startsWith("chest-rows") && stage==0) stage=120;
+            if(mode.startsWith("tool-override") && stage==0) stage=100;
+            if(mode.startsWith("rapid-punch") && stage==0) stage=90;
+            if(mode.equals("row-swap") && stage==0) stage=80;
             if(mode.equals("creative-regression") && stage==0) stage=50;
+            if(mode.equals("item-best") && stage==0) stage=56;
+            if(mode.startsWith("punch-recovery") && stage==0) stage=60;
             switch(stage) {
                 case 0:
                     pending=server(() -> {
@@ -363,8 +386,475 @@ public final class RuntimeTestMod {
                     require(!ClientProxy.finder.interacting(),"Dimension change leaked finder suppression");
                     pass("Actual dimension transfer renews punch session and releases finder suppression");stage++;break;
                 case 42:
+                    if(mode.equals("pack") && rowsTested && !chestRowsTested) {stage=120;break;}
+                    if(!rowsTested) { stage=80;break; }
                     if(!mode.equals("pack")) { stage=50;break; }
                     pass(mode.equals("pack")?"ALL PACK RUNTIME TESTS PASSED":"ALL INTEGRATED RUNTIME TESTS PASSED");stage++;mc.shutdown();break;
+                case 120:
+                    if(mc.currentScreen!=null) mc.player.closeScreen();
+                    hotbar=null;Settings.chestButtons=chestRowCase!=0;
+                    pending=server(() -> {
+                        player().setGameType(mode.contains("creative")?GameType.CREATIVE:GameType.SURVIVAL);player().connection.setPlayerLocation(.5,4,.5,0,20);
+                        for(BlockPos pos:new BlockPos[]{CHEST,CHEST.east()}) {
+                            if(player().world.getTileEntity(pos) instanceof net.minecraft.inventory.IInventory)
+                                ((net.minecraft.inventory.IInventory)player().world.getTileEntity(pos)).clear();
+                            player().world.setBlockState(pos,Blocks.AIR.getDefaultState());
+                            player().world.setBlockState(pos.up(),Blocks.AIR.getDefaultState());
+                        }
+                        player().world.setBlockState(CHEST,Blocks.CHEST.getDefaultState());
+                        if(chestRowCase>=6) player().world.setBlockState(CHEST.east(),Blocks.CHEST.getDefaultState());
+                        net.minecraft.inventory.IInventory storage=((net.minecraft.block.BlockChest)Blocks.CHEST).getLockableContainer(player().world,CHEST);
+                        for(int i=0;i<storage.getSizeInventory();i++) {
+                            ItemStack stack=i%7==0?ItemStack.EMPTY:new ItemStack(Items.APPLE,1+i%63);
+                            if(!stack.isEmpty() && i%3==0) stack.setStackDisplayName("Chest "+i);
+                            storage.setInventorySlotContents(i,stack);
+                        }
+                        player().inventory.clear();
+                        for(int i=0;i<36;i++) {
+                            ItemStack stack=i%8==0?ItemStack.EMPTY:new ItemStack(Items.APPLE,2+i);
+                            if(!stack.isEmpty() && i%4==0) stack.setStackDisplayName("Player "+i);
+                            player().inventory.setInventorySlotContents(i,stack);
+                        }
+                        player().inventory.setInventorySlotContents(0,new ItemStack(Items.DIAMOND_SWORD).setStackDisplayName("Hotbar sword"));
+                        player().inventoryContainer.detectAndSendChanges();
+                    });stage=121;next=ticks+20;break;
+                case 121:
+                    if(mc.currentScreen!=null || mc.player.getDistanceSq(CHEST)>16 || mc.world.getBlockState(CHEST).getBlock()!=Blocks.CHEST || !ClientProxy.observing) {
+                        if(ticks-next>160) throw new AssertionError("Chest fixture not ready: "+mc.currentScreen+" pos="+mc.player.getPositionVector());return;
+                    }
+                    LookCommand.lookAt(new Vec3d(CHEST).add(.5,.5,.5));mc.playerController.updateController();
+                    mc.playerController.processRightClickBlock(mc.player,mc.world,CHEST,EnumFacing.NORTH,new Vec3d(.5,4.5,3),EnumHand.MAIN_HAND);
+                    stage=122;next=ticks+15;break;
+                case 122:
+                    if(!(mc.currentScreen instanceof net.minecraft.client.gui.inventory.GuiChest)) {
+                        if(ticks-next>100) throw new AssertionError("Chest row screen missing: "+mc.currentScreen+" pos="+mc.player.getPositionVector());return;
+                    }
+                    GuiContainer chestRowScreen=(GuiContainer)mc.currentScreen;
+                    int storageSize=chestRowCase<6?27:54, number=chestRowCase<6?chestRowCase+1:chestRowCase-6+1;
+                    int first=number<=3?storageSize+(3-number)*9:storageSize-(number-3)*9;
+                    int count=0;
+                    for(net.minecraft.client.gui.GuiButton button:buttons) if(button.displayString.matches("[1-9]")) {
+                        count++;int n=Integer.parseInt(button.displayString);
+                        int rowFirst=n<=3?storageSize+(3-n)*9:storageSize-(n-3)*9;
+                        require(button.y==chestRowScreen.getGuiTop()+chestRowScreen.inventorySlots.getSlot(rowFirst).yPos,"Chest row label misaligned");
+                        require(button.x<chestRowScreen.getGuiLeft(),"Chest row label not on left");
+                    }
+                    require(count==3+storageSize/9,"Wrong chest row button count or a hotbar button was added");
+                    if(chestRowCase==0) for(net.minecraft.client.gui.GuiButton button:buttons) require(!button.displayString.equals("Take"),"Independent chest toggle ignored");
+                    Field chestBindings=ClientProxy.class.getDeclaredField("swapRows");chestBindings.setAccessible(true);
+                    net.minecraft.client.settings.KeyBinding[] rowBindings=(net.minecraft.client.settings.KeyBinding[])chestBindings.get(StorageTweaks.proxy);
+                    require(rowBindings.length==9,"Missing row 4-9 bindings");
+                    for(net.minecraft.client.settings.KeyBinding binding:rowBindings) require(binding.getKeyCode()==0,"New row binding is not unbound");
+                    chestRowInitial=InventoryAdapter.snapshot(chestRowScreen.inventorySlots);
+                    List<org.firebadnofire.storagetweaks.inventory.Stack> swapped=new ArrayList<>(chestRowInitial.slots);
+                    for(int i=0;i<9;i++) Collections.swap(swapped,first+i,storageSize+27+i);
+                    chestRowExpected=new Snapshot(swapped,chestRowInitial.cursor,chestRowInitial.limits());
+                    chestSwapRepeat=0;dispatchChestRow(number,chestRowCase%2!=0);
+                    stage=123;next=ticks+40;break;
+                case 123:
+                    require(!ClientProxy.JOB.active(),"Chest row swap did not finish");
+                    require(InventoryAdapter.snapshot(mc.player.openContainer).equals(chestSwapRepeat==0?chestRowExpected:chestRowInitial),"Client chest swap differs from exact column exchange");
+                    if(chestRowCase==5 || chestRowCase==14) net.minecraft.util.ScreenShotHelper.saveScreenshot(mc.gameDir,"chest-rows-"+(chestRowCase==5?"small":"large")+".png",mc.displayWidth,mc.displayHeight,mc.getFramebuffer());
+                    pending=server(() -> {
+                        Snapshot expectedRow=chestSwapRepeat==0?chestRowExpected:chestRowInitial;
+                        require(player().inventory.getItemStack().isEmpty(),"Chest swap left server cursor occupied");
+                        for(int i=0;i<expectedRow.slots.size();i++) require(expectedRow.slots.get(i).equals(InventoryAdapter.value(player().openContainer.getSlot(i).getStack())),"Server chest row mismatch at slot "+i);
+                    });stage=124;break;
+                case 124:
+                    if(chestSwapRepeat==0) {
+                        chestSwapRepeat=1;
+                        int reverseNumber=chestRowCase<6?chestRowCase+1:chestRowCase-6+1;
+                        dispatchChestRow(reverseNumber,chestRowCase%2==0);stage=123;next=ticks+40;break;
+                    }
+                    pass("CHEST_ROW_SWAP_SERVER_VERIFIED case="+chestRowCase);
+                    mc.player.closeScreen();chestRowCase++;if(chestRowCase<15) {stage=120;break;}
+                    Settings.chestButtons=true;chestRowsTested=true;
+                    if(mode.equals("pack")) {stage=42;break;}
+                    pass("ALL CHEST ROW SWAP TESTS PASSED");stage=125;mc.shutdown();break;
+                case 100:
+                    Field overrideField=ClientProxy.class.getDeclaredField("punchOverride");overrideField.setAccessible(true);
+                    overrideBinding=(net.minecraft.client.settings.KeyBinding)overrideField.get(StorageTweaks.proxy);
+                    if(overrideCase==0) require(overrideBinding.getKeyCode()==org.lwjgl.input.Keyboard.KEY_LSHIFT,"Override does not default to Left Shift");
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraft.client.settings.KeyBinding.class,overrideBinding,false,"pressed","field_74513_e");
+                    if(overrideCase>0) overrideBinding.setKeyCode(org.lwjgl.input.Keyboard.KEY_G);
+                    Settings.punchExclusions=new String[]{"minecraft:diamond"};
+                    pending=server(() -> {
+                        player().setGameType(mode.contains("creative")?GameType.CREATIVE:GameType.SURVIVAL);
+                        player().world.getGameRules().setOrCreateGameRule("doMobSpawning","false");
+                        player().connection.setPlayerLocation(.5,4,.5,0,20);player().inventory.clear();player().inventory.currentItem=0;player().setSneaking(false);
+                        player().world.setBlockState(CHEST,Blocks.CHEST.getDefaultState());chest().clear();
+                        net.minecraft.item.Item[] kinds={Items.DIAMOND_AXE,Items.DIAMOND_HOE,Items.DIAMOND_SWORD,Items.BOW,Items.SHEARS,Items.ELYTRA,Items.DIAMOND,Items.APPLE};
+                        ItemStack held=new ItemStack(kinds[overrideCase],overrideCase<6?1:7);
+                        if(overrideCase<6) {
+                            held.setItemDamage(17);held.setStackDisplayName("Named protected item");
+                            held.addEnchantment(net.minecraft.init.Enchantments.UNBREAKING,1);
+                        }
+                        overrideOriginal=InventoryAdapter.value(held);
+                        player().inventory.setInventorySlotContents(0,held);player().inventoryContainer.detectAndSendChanges();
+                        mc.getIntegratedServer().getCommandManager().executeCommand(player(),"punchdeposit true");
+                    });stage=101;next=ticks+25;break;
+                case 101:
+                    LookCommand.lookAt(new Vec3d(CHEST).add(.5,.5,.5));
+                    if(!ClientProxy.capabilityStatus.equals("available") || mc.currentScreen!=null || mc.objectMouseOver==null || !CHEST.equals(mc.objectMouseOver.getBlockPos())) {
+                        if(ticks-next>160) throw new AssertionError("Override fixture did not reach chest/capability");return;
+                    }
+                    java.lang.reflect.Method hintMethod=ClientProxy.class.getDeclaredMethod("overrideHint");hintMethod.setAccessible(true);
+                    require(hintMethod.invoke(StorageTweaks.proxy).equals(overrideCase==0?"[SHIFT]":"[G]"),"Wrong rebound override hint");
+                    require(PunchNetwork.eligible(ItemStack.EMPTY,true)==false,"Override permits empty hand");
+                    require(PunchNetwork.requiresOverride(mc.player.getHeldItemMainhand())==(overrideCase<7),"Protected item classification wrong");
+                    stage=102;next=ticks+2;break;
+                case 102:
+                    java.lang.reflect.Method hintAvailable=ClientProxy.class.getDeclaredMethod("available");hintAvailable.setAccessible(true);
+                    if(!(boolean)hintAvailable.invoke(StorageTweaks.proxy)) {
+                        if(ticks-next>120) throw new AssertionError("No protected-item hint before override held");return;
+                    }
+                    if(overrideCase<2) net.minecraft.util.ScreenShotHelper.saveScreenshot(mc.gameDir,"tool-override-hint-"+overrideCase+".png",mc.displayWidth,mc.displayHeight,mc.getFramebuffer());
+                    net.minecraftforge.client.event.MouseEvent plainToolClick=new net.minecraftforge.client.event.MouseEvent();
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,plainToolClick,0,"button");
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,plainToolClick,true,"buttonstate");
+                    ((ClientProxy)StorageTweaks.proxy).mouse(plainToolClick);
+                    require(plainToolClick.isCanceled()==(overrideCase==7),"Plain tool attack was intercepted or ordinary item was blocked");
+                    if(overrideCase<7) {
+                        Field nextRequest=ClientProxy.class.getDeclaredField("request");nextRequest.setAccessible(true);
+                        long protectedRequest=nextRequest.getLong(StorageTweaks.proxy)+1;nextRequest.setLong(StorageTweaks.proxy,protectedRequest);
+                        punch(protectedRequest,CHEST); // Fresh, matching-slot request without override must still be refused.
+                    }
+                    stage=103;next=ticks+15;break;
+                case 103:
+                    pending=server(() -> {
+                        if(overrideCase<7) {
+                            require(overrideOriginal.equals(InventoryAdapter.value(player().getHeldItemMainhand())),"Server accepted protected item without explicit override");
+                            require(chest().isEmpty(),"Rejected protected request changed chest");
+                        }
+                    });stage=104;break;
+                case 104:
+                    if(overrideCase<7) {
+                        net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraft.client.settings.KeyBinding.class,overrideBinding,true,"pressed","field_74513_e");
+                        net.minecraftforge.client.event.MouseEvent overrideClick=new net.minecraftforge.client.event.MouseEvent();
+                        net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,overrideClick,0,"button");
+                        net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,overrideClick,true,"buttonstate");
+                        ((ClientProxy)StorageTweaks.proxy).mouse(overrideClick);
+                        require(overrideClick.isCanceled(),"Override click fell through to mining");
+                    }
+                    stage=105;next=ticks+20;break;
+                case 105:
+                    pending=server(() -> {
+                        require(player().getHeldItemMainhand().isEmpty(),"Override did not deposit held item");
+                        require(overrideOriginal.equals(InventoryAdapter.value(chest().getStackInSlot(0))),"Override changed count, name, damage or enchantment");
+                        require(player().world.getBlockState(CHEST).getBlock()==Blocks.CHEST,"Override destroyed chest");
+                        require(!player().isSneaking(),"Rebound override should not require vanilla crouch state");
+                    });stage=106;break;
+                case 106:
+                    pass("TOOL_OVERRIDE_SERVER_VERIFIED case="+overrideCase+" mode="+mode);
+                    overrideCase++;if(overrideCase<8) {stage=100;break;}
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraft.client.settings.KeyBinding.class,overrideBinding,false,"pressed","field_74513_e");
+                    overrideBinding.setKeyCode(org.lwjgl.input.Keyboard.KEY_LSHIFT);Settings.punchExclusions=new String[0];
+                    pass("ALL TOOL OVERRIDE TESTS PASSED mode="+mode);stage=107;mc.shutdown();break;
+                case 90:
+                    pending=server(() -> {
+                        player().setGameType(mode.contains("creative")?GameType.CREATIVE:GameType.SURVIVAL);
+                        player().world.getWorldInfo().setDifficulty(EnumDifficulty.PEACEFUL);
+                        player().world.getGameRules().setOrCreateGameRule("doMobSpawning","false");
+                        player().connection.setPlayerLocation(.5,4,.5,0,20);player().inventory.clear();
+                        player().world.setBlockState(CHEST,Blocks.CHEST.getDefaultState());chest().clear();
+                        for(int i=0;i<9;i++) player().inventory.setInventorySlotContents(i,new ItemStack(Items.APPLE,i+2));
+                        player().inventoryContainer.detectAndSendChanges();
+                        mc.getIntegratedServer().getCommandManager().executeCommand(player(),"punchdeposit true");
+                    });stage=91;next=ticks+30;break;
+                case 91:
+                    if(!ClientProxy.capabilityStatus.equals("available")) {
+                        if(ticks-next>150) throw new AssertionError("Punch capability unavailable: "+ClientProxy.capabilityStatus);
+                        return;
+                    }
+                    LookCommand.lookAt(new Vec3d(CHEST).add(.5,.5,.5));
+                    pending=mc.getConnection().getNetworkManager().channel().eventLoop().submit(() -> {
+                        mc.getConnection().getNetworkManager().channel().pipeline().addFirst("delayed-punch-label",new ChannelInboundHandlerAdapter() {
+                            @Override public void channelRead(ChannelHandlerContext context,Object message) throws Exception {
+                                io.netty.buffer.ByteBuf probeData=null;String probeChannel=null;
+                                if(message instanceof net.minecraft.network.play.server.SPacketCustomPayload) {
+                                    net.minecraft.network.play.server.SPacketCustomPayload packet=(net.minecraft.network.play.server.SPacketCustomPayload)message;
+                                    probeData=packet.getBufferData();probeChannel=packet.getChannelName();
+                                } else if(message instanceof net.minecraftforge.fml.common.network.internal.FMLProxyPacket) {
+                                    net.minecraftforge.fml.common.network.internal.FMLProxyPacket packet=(net.minecraftforge.fml.common.network.internal.FMLProxyPacket)message;
+                                    probeData=packet.payload();probeChannel=packet.channel();
+                                }
+                                if("fbstorage".equals(probeChannel) && probeData.readableBytes()>1 && probeData.getUnsignedByte(probeData.readerIndex()+1)==6) {
+                                    delayedProbeReplies.incrementAndGet();
+                                    context.executor().schedule(() -> context.fireChannelRead(message),2,java.util.concurrent.TimeUnit.SECONDS);return;
+                                }
+                                super.channelRead(context,message);
+                            }
+                        });
+                    });stage=92;next=ticks+15;break;
+                case 92:
+                    if(mc.currentScreen!=null || mc.objectMouseOver==null || !CHEST.equals(mc.objectMouseOver.getBlockPos())) {
+                        if(ticks-next>100) throw new AssertionError("Rapid fixture not aiming at chest: screen="+mc.currentScreen+" hit="+mc.objectMouseOver+" held="+mc.player.getHeldItemMainhand());
+                        return;
+                    }
+                    if(rapidIndex<9) {
+                        mc.player.inventory.currentItem=rapidIndex;
+                        // Remove any previously received label authorization. Click in this same
+                        // frame, before a slot-change tick or its availability reply can run.
+                        Field auth=ClientProxy.class.getDeclaredField("authorizedTarget");auth.setAccessible(true);auth.set(StorageTweaks.proxy,null);
+                        if(rapidIndex%2==0) {
+                            net.minecraftforge.client.event.MouseEvent rapidMouse=new net.minecraftforge.client.event.MouseEvent();
+                            net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,rapidMouse,0,"button");
+                            net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,rapidMouse,true,"buttonstate");
+                            ((ClientProxy)StorageTweaks.proxy).mouse(rapidMouse);
+                            if(!rapidMouse.isCanceled()) mc.playerController.clickBlock(CHEST,EnumFacing.NORTH);
+                            require(rapidMouse.isCanceled(),"Switched-slot attack fell through to mining at slot "+rapidIndex+" capability="+ClientProxy.capabilityStatus+" held="+mc.player.getHeldItemMainhand()+" pos="+mc.player.getPositionVector()+" hit="+mc.objectMouseOver);
+                        } else {
+                            net.minecraft.client.settings.KeyBinding.setKeyBindState(mc.gameSettings.keyBindAttack.getKeyCode(),true);
+                            mc.playerController.updateController(); // Our mouse/key interception synchronizes before any attack.
+                            mc.playerController.clickBlock(CHEST,EnumFacing.NORTH);
+                            require(!mc.gameSettings.keyBindAttack.isKeyDown(),"Remapped/held attack survived deposit interception");
+                        }
+                        require(mc.world.getBlockState(CHEST).getBlock()==Blocks.CHEST,"Creative client predicted chest destruction");
+                        rapidIndex++;next=ticks+1;return;
+                    }
+                    stage=93;next=ticks+30;break;
+                case 93:
+                    pending=server(() -> {
+                        require(player().world.getBlockState(CHEST).getBlock()==Blocks.CHEST,"Rapid attacks destroyed server chest");
+                        require(total(chest(),Items.APPLE)==54,"Rapid deposits did not conserve all 54 apples: "+total(chest(),Items.APPLE));
+                        for(int i=0;i<9;i++) require(player().inventory.getStackInSlot(i).isEmpty(),"Rapid deposit missed slot "+i);
+                        player().inventory.setInventorySlotContents(0,new ItemStack(Items.APPLE,3));player().inventoryContainer.detectAndSendChanges();
+                    });stage=94;next=ticks+20;break;
+                case 94:
+                    mc.player.inventory.currentItem=0;
+                    net.minecraft.client.settings.KeyBinding.setKeyBindState(mc.gameSettings.keyBindAttack.getKeyCode(),true);
+                    net.minecraft.client.settings.KeyBinding.onTick(mc.gameSettings.keyBindAttack.getKeyCode());
+                    ((ClientProxy)StorageTweaks.proxy).tick(new TickEvent.ClientTickEvent(TickEvent.Phase.START));
+                    require(!mc.gameSettings.keyBindAttack.isKeyDown() && !mc.gameSettings.keyBindAttack.isPressed(),"Held attack was not suppressed");
+                    require(mc.world.getBlockState(CHEST).getBlock()==Blocks.CHEST,"Held attack destroyed chest");
+                    require(delayedProbeReplies.get()>0,"Probe latency fixture did not intercept any real replies");
+                    pass("IMMEDIATE_RAPID_PUNCH_PASSED mode="+mode+" delayedProbeReplies="+delayedProbeReplies.get());
+                    Settings.punch=false;
+                    net.minecraftforge.client.event.MouseEvent disabledPunch=new net.minecraftforge.client.event.MouseEvent();
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,disabledPunch,0,"button");
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,disabledPunch,true,"buttonstate");
+                    ((ClientProxy)StorageTweaks.proxy).mouse(disabledPunch);
+                    require(!disabledPunch.isCanceled(),"Disabled client punch intercepted ordinary attack");
+                    stage=95;next=ticks+20;break;
+                case 95:
+                    pending=server(() -> {
+                        net.minecraftforge.event.entity.player.PlayerInteractEvent.LeftClickBlock disabledAttack=
+                            new net.minecraftforge.event.entity.player.PlayerInteractEvent.LeftClickBlock(player(),CHEST,EnumFacing.NORTH,new Vec3d(CHEST));
+                        MinecraftForge.EVENT_BUS.post(disabledAttack);
+                        require(!disabledAttack.isCanceled(),"Disabled client punch left server break guard enabled");
+                    });stage=96;break;
+                case 96:
+                    Settings.punch=true;
+                    pass("CLIENT_PUNCH_DISABLE_RESTORES_SERVER_MINING mode="+mode);
+                    stage=97;mc.shutdown();break;
+                case 80:
+                    if(mc.currentScreen!=null) mc.player.closeScreen();
+                    hotbar=null;
+                    pending=server(() -> {
+                        player().setGameType(rowVariant%6<3?GameType.SURVIVAL:GameType.CREATIVE);
+                        player().inventory.clear();
+                        for(int i=0;i<36;i++) {
+                            ItemStack stack=i%7==0?ItemStack.EMPTY:new ItemStack(Items.APPLE,1+i);
+                            if(i%5==0 && !stack.isEmpty()) stack.setStackDisplayName("Named "+i);
+                            player().inventory.setInventorySlotContents(i,stack);
+                        }
+                        player().inventoryContainer.detectAndSendChanges();
+                    });stage=81;next=ticks+30;break;
+                case 81:
+                    if(rowVariant>=6) {
+                        rowExpected=new ArrayList<>();
+                        for(int i=0;i<36;i++) rowExpected.add(mc.player.inventory.getStackInSlot(i).copy());
+                        int keyRow=rowVariant%3+1, keyFirst=9+(3-keyRow)*9;
+                        for(int i=0;i<9;i++) Collections.swap(rowExpected,i,keyFirst+i);
+                        Field bindings=ClientProxy.class.getDeclaredField("swapRows");bindings.setAccessible(true);
+                        net.minecraft.client.settings.KeyBinding[] keys=(net.minecraft.client.settings.KeyBinding[])bindings.get(StorageTweaks.proxy);
+                        for(net.minecraft.client.settings.KeyBinding key:keys) require(key.getKeyCode()==0,"Swap binding must initially be unbound");
+                        Set<Integer> usedKeys=new HashSet<>();
+                        for(net.minecraft.client.settings.KeyBinding key:mc.gameSettings.keyBindings) {
+                            usedKeys.add(key.getKeyCode());
+                            if(key.getKeyCode()==org.lwjgl.input.Keyboard.KEY_F10) StorageTweaks.LOG.info("ROW_FIXTURE_F10_BINDING {}",key.getKeyDescription());
+                        }
+                        int unusedKey=org.lwjgl.input.Keyboard.KEY_F15;
+                        while(unusedKey>0 && usedKeys.contains(unusedKey)) unusedKey--;
+                        require(unusedKey>0,"No unused keyboard key for fixture");
+                        StorageTweaks.LOG.info("ROW_FIXTURE_UNUSED_KEY {}",unusedKey);
+                        keys[keyRow-1].setKeyCode(unusedKey);
+                        net.minecraft.client.settings.KeyBinding.resetKeyBindingArrayAndHash();
+                        net.minecraft.client.settings.KeyBinding.onTick(unusedKey);
+                        stage=82;next=ticks+50;break;
+                    }
+                    GuiContainer rowScreen;
+                    if(rowVariant<3) rowScreen=new net.minecraft.client.gui.inventory.GuiInventory(mc.player);
+                    else {
+                        net.minecraft.client.gui.inventory.GuiContainerCreative creativeRows=new net.minecraft.client.gui.inventory.GuiContainerCreative(mc.player);
+                        mc.displayGuiScreen(creativeRows);
+                        java.lang.reflect.Method selectRows=null;
+                        for(java.lang.reflect.Method method:creativeRows.getClass().getDeclaredMethods())
+                            if(java.lang.reflect.Modifier.isPrivate(method.getModifiers()) && method.getReturnType()==Void.TYPE &&
+                                Arrays.equals(method.getParameterTypes(),new Class<?>[]{net.minecraft.creativetab.CreativeTabs.class})) selectRows=method;
+                        require(selectRows!=null,"Creative tab method unavailable");selectRows.setAccessible(true);
+                        selectRows.invoke(creativeRows,net.minecraft.creativetab.CreativeTabs.BUILDING_BLOCKS);
+                        for(net.minecraft.client.gui.GuiButton button:buttons) if(button.displayString.matches("[123]")) {
+                            button.drawButton(mc,0,0,0);require(!button.visible,"Row swap visible in creative catalogue");
+                        }
+                        selectRows.invoke(creativeRows,net.minecraft.creativetab.CreativeTabs.INVENTORY);
+                        rowScreen=creativeRows;
+                    }
+                    mc.displayGuiScreen(rowScreen);
+                    rowExpected=new ArrayList<>();
+                    for(int i=0;i<36;i++) rowExpected.add(mc.player.inventory.getStackInSlot(i).copy());
+                    int rowNumber=rowVariant%3+1, firstRow=9+(3-rowNumber)*9;
+                    for(int i=0;i<9;i++) Collections.swap(rowExpected,i,firstRow+i);
+                    int rowButtonCount=0;
+                    for(net.minecraft.client.gui.GuiButton button:buttons) if(button.displayString.matches("[123]")) {
+                        rowButtonCount++;require(button.x<rowScreen.getGuiLeft(),"Swap button is not left of inventory");
+                        if(button.displayString.equals(Integer.toString(rowNumber)))
+                            MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiScreenEvent.ActionPerformedEvent.Pre(rowScreen,button,buttons));
+                    }
+                    require(rowButtonCount==3,"Expected exactly three row buttons, none for hotbar");
+                    require(ClientProxy.JOB.active(),"Row swap did not start");stage=82;next=ticks+50;break;
+                case 82:
+                    if(rowVariant<6) net.minecraft.util.ScreenShotHelper.saveScreenshot(mc.gameDir,"row-swap-"+rowVariant+".png",mc.displayWidth,mc.displayHeight,mc.getFramebuffer());
+                    require(!ClientProxy.JOB.active(),"Row swap failed to finish");
+                    for(int i=0;i<36;i++) require(ItemStack.areItemStacksEqual(rowExpected.get(i),mc.player.inventory.getStackInSlot(i)),"Client row mismatch "+i);
+                    pending=server(() -> {
+                        for(int i=0;i<36;i++) require(ItemStack.areItemStacksEqual(rowExpected.get(i),player().inventory.getStackInSlot(i)),"Server row mismatch "+i);
+                        require(player().inventory.getItemStack().isEmpty(),"Row swap left cursor occupied");
+                    });stage=83;break;
+                case 83:
+                    pass("ROW_SWAP_SERVER_VERIFIED variant="+rowVariant);mc.player.closeScreen();
+                    Field resetBindings=ClientProxy.class.getDeclaredField("swapRows");resetBindings.setAccessible(true);
+                    for(net.minecraft.client.settings.KeyBinding key:(net.minecraft.client.settings.KeyBinding[])resetBindings.get(StorageTweaks.proxy)) key.setKeyCode(0);
+                    net.minecraft.client.settings.KeyBinding.resetKeyBindingArrayAndHash();rowVariant++;
+                    if(rowVariant<12) { stage=80;break; }
+                    rowsTested=true;
+                    if(mode.equals("pack")) { stage=42;break; }
+                    pass("ALL ROW SWAP RUNTIME TESTS PASSED");stage=84;mc.shutdown();break;
+                case 70:
+                    java.lang.reflect.Method hotbarAvailability=ClientProxy.class.getDeclaredMethod("available");hotbarAvailability.setAccessible(true);
+                    if(!(boolean)hotbarAvailability.invoke(StorageTweaks.proxy)) {
+                        if(ticks-next>20) throw new AssertionError("Hotbar switch left availability stuck while still aiming at chest; held="+mc.player.getHeldItemMainhand());return;
+                    }
+                    require(mc.objectMouseOver.getBlockPos().equals(CHEST),"Hotbar test lost chest aim");
+                    net.minecraftforge.client.event.MouseEvent hotbarMouse=new net.minecraftforge.client.event.MouseEvent();
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,hotbarMouse,0,"button");
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,hotbarMouse,true,"buttonstate");
+                    ((ClientProxy)StorageTweaks.proxy).mouse(hotbarMouse);
+                    require(hotbarMouse.isCanceled(),"Switched-slot punch did not intercept");stage=71;next=ticks+20;break;
+                case 71:
+                    pending=server(() -> {
+                        require(chest().getStackInSlot(0).getItem()==Items.APPLE && chest().getStackInSlot(0).getCount()==7,"Switched hotbar deposit failed");
+                        require(player().inventory.getStackInSlot(1).isEmpty(),"Selected hotbar slot not consumed");
+                        require(player().inventory.getStackInSlot(0).getCount()==10,"Unselected hotbar slot changed");
+                    });stage=72;break;
+                case 72:
+                    pass("HOTBAR_SWITCH_DEPOSIT_WITHOUT_LOOKING_AWAY mode="+mode);stage=73;mc.shutdown();break;
+                case 60:
+                    pending=server(() -> {
+                        if(mode.endsWith("creative")) player().setGameType(GameType.CREATIVE);
+                        player().connection.setPlayerLocation(.5,4,.5,0,20);player().inventory.clear();
+                        player().world.setBlockState(CHEST,Blocks.CHEST.getDefaultState());chest().clear();
+                        player().inventory.setInventorySlotContents(0,new ItemStack(Blocks.STONE,10));
+                        if(mode.contains("hotbar")) player().inventory.setInventorySlotContents(1,new ItemStack(Items.APPLE,7));
+                        player().inventoryContainer.detectAndSendChanges();
+                        try { mc.getIntegratedServer().getCommandManager().executeCommand(player(),"punchdeposit true"); }
+                        catch(Exception failure) { throw new AssertionError(failure); }
+                    });stage=61;next=ticks+40;break;
+                case 61:
+                    java.lang.reflect.Method availability=ClientProxy.class.getDeclaredMethod("available");availability.setAccessible(true);
+                    if(!(boolean)availability.invoke(StorageTweaks.proxy)) {
+                        if(ticks-next>120) throw new AssertionError("No initial punch availability: "+ClientProxy.capabilityStatus+" held="+mc.player.getHeldItemMainhand()+" hit="+mc.objectMouseOver);
+                        return;
+                    }
+                    if(mode.contains("hotbar")) { earlyHotbarSwitch=true;stage=70;next=ticks+1;break; }
+                    pending=server(() -> mc.getIntegratedServer().getCommandManager().executeCommand(player(),"punchdeposit false"));stage=62;next=ticks+20;break;
+                case 62:
+                    require(!ClientProxy.capabilityStatus.equals("available"),"Disable did not revoke capability");
+                    pending=server(() -> mc.getIntegratedServer().getCommandManager().executeCommand(player(),"punchdeposit true"));stage=63;next=ticks+20;break;
+                case 63:
+                    java.lang.reflect.Method enabledAvailability=ClientProxy.class.getDeclaredMethod("available");enabledAvailability.setAccessible(true);
+                    if(!(boolean)enabledAvailability.invoke(StorageTweaks.proxy)) {
+                        if(ticks-next>120) throw new AssertionError("Punch did not recover after enable: "+ClientProxy.capabilityStatus);
+                        return;
+                    }
+                    net.minecraftforge.client.event.MouseEvent punchMouse=new net.minecraftforge.client.event.MouseEvent();
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,punchMouse,0,"button");
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,punchMouse,true,"buttonstate");
+                    ((ClientProxy)StorageTweaks.proxy).mouse(punchMouse);
+                    require(punchMouse.isCanceled(),"Available punch did not intercept mouse");stage=64;next=ticks+20;break;
+                case 64:
+                    pending=server(() -> {
+                        require(chest().getStackInSlot(0).getCount()==10,"Mouse-hook deposit failed after toggle");
+                        require(player().getHeldItemMainhand().isEmpty(),"Deposit did not consume held stack");
+                    });stage=65;break;
+                case 65:
+                    pass("PUNCH_RECOVERY_PASSED: available, disabled, reenabled, mouse-hook deposit server verified");
+                    pending=server(() -> { player().inventory.setInventorySlotContents(0,new ItemStack(Items.APPLE,7));player().inventoryContainer.detectAndSendChanges(); });
+                    stage=66;next=ticks+15;break;
+                case 66:
+                    java.lang.reflect.Method switchedAvailability=ClientProxy.class.getDeclaredMethod("available");switchedAvailability.setAccessible(true);
+                    if(!(boolean)switchedAvailability.invoke(StorageTweaks.proxy)) {
+                        if(ticks-next>120) throw new AssertionError("Punch unavailable after held-item switch");return;
+                    }
+                    net.minecraftforge.client.event.MouseEvent switchedMouse=new net.minecraftforge.client.event.MouseEvent();
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,switchedMouse,0,"button");
+                    net.minecraftforge.fml.relauncher.ReflectionHelper.setPrivateValue(net.minecraftforge.client.event.MouseEvent.class,switchedMouse,true,"buttonstate");
+                    ((ClientProxy)StorageTweaks.proxy).mouse(switchedMouse);stage=67;next=ticks+20;break;
+                case 67:
+                    pending=server(() -> {
+                        require(chest().getStackInSlot(0).getCount()==10 && chest().getStackInSlot(1).getItem()==Items.APPLE && chest().getStackInSlot(1).getCount()==7,"Switched-item punch failed");
+                        require(player().getHeldItemMainhand().isEmpty(),"Switched-item punch left held contents");
+                    });stage=68;break;
+                case 68:
+                    pass("PUNCH_SWITCH_RECOVERY_PASSED: switched item deposited after toggle, mode="+mode);stage=69;mc.shutdown();break;
+                case 56:
+                    pending=server(() -> {
+                        player().connection.setPlayerLocation(.5,4,.5,0,20);player().inventory.clear();
+                        int[] counts={3,12,7};BlockPos[] positions={new BlockPos(0,4,3),new BlockPos(2,4,1),new BlockPos(-2,4,1)};
+                        for(int i=0;i<positions.length;i++) {
+                            player().world.setBlockState(positions[i],Blocks.CHEST.getDefaultState());
+                            net.minecraft.tileentity.TileEntityChest tile=(net.minecraft.tileentity.TileEntityChest)player().world.getTileEntity(positions[i]);
+                            tile.clear();tile.setInventorySlotContents(0,new ItemStack(Items.APPLE,counts[i]));
+                        }
+                        player().inventoryContainer.detectAndSendChanges();
+                    });stage=57;next=ticks+50;break;
+                case 57:
+                    if(mc.player.getDistance(.5,4,.5)>1 || mc.world.getBlockState(new BlockPos(2,4,1)).getBlock()!=Blocks.CHEST) return;
+                    mc.displayGuiScreen(null);
+                    ClientCommandHandler.instance.executeCommand(mc.player,"/cfinditem minecraft:apple");
+                    scanYaw=mc.player.rotationYaw;scanPitch=mc.player.rotationPitch;
+                    stage=58;next=ticks+1;break;
+                case 58:
+                    if(ClientProxy.finder.interacting()) {
+                        require(mc.player.rotationYaw==scanYaw && mc.player.rotationPitch==scanPitch,"Item scan moved view before final selection");return;
+                    }
+                    require(mc.currentScreen instanceof GuiContainer,"Best item search did not show a container");
+                    GuiContainer bestScreen=(GuiContainer)mc.currentScreen;
+                    int apples=0;
+                    for(int slot:InventoryAdapter.group(bestScreen.inventorySlots,false,false)) if(bestScreen.inventorySlots.getSlot(slot).getStack().getItem()==Items.APPLE) apples+=bestScreen.inventorySlots.getSlot(slot).getStack().getCount();
+                    require(apples==12,"Did not select highest count: "+apples);
+                    Vec3d towardBest=new Vec3d(2.5,4.5,1.5).subtract(mc.player.getPositionEyes(1)).normalize();
+                    require(mc.player.getLookVec().normalize().dotProduct(towardBest)>.999999,"Did not face best chest");
+                    require(!ClientProxy.finder.interacting(),"Best search leaked suppression");
+                    mc.player.closeScreen();
+                    java.util.List<net.minecraft.client.gui.ChatLine> history=net.minecraftforge.fml.relauncher.ReflectionHelper.getPrivateValue(net.minecraft.client.gui.GuiNewChat.class,mc.ingameGUI.getChatGUI(),"chatLines","field_146252_h");
+                    net.minecraft.util.text.ITextComponent clickPart=null;
+                    for(net.minecraft.client.gui.ChatLine line:history) {
+                        for(net.minecraft.util.text.ITextComponent wrapped:net.minecraft.client.gui.GuiUtilRenderComponents.splitText(line.getChatComponent(),70,mc.fontRenderer,false,false))
+                            for(net.minecraft.util.text.ITextComponent part:wrapped) {
+                                net.minecraft.util.text.event.ClickEvent click=part.getStyle().getClickEvent();
+                                if(click!=null && click.getAction()==net.minecraft.util.text.event.ClickEvent.Action.RUN_COMMAND && click.getValue().startsWith("/clook ")) clickPart=part;
+                            }
+                    }
+                    require(clickPart!=null,"Wrapped chat lost Look at click action");
+                    String[] clickCoordinates=clickPart.getStyle().getClickEvent().getValue().split(" ");
+                    net.minecraft.client.gui.GuiChat clickChat=new net.minecraft.client.gui.GuiChat();mc.displayGuiScreen(clickChat);
+                    require(clickChat.handleComponentClick(clickPart),"Chat did not handle Look at click");
+                    Vec3d clickedTarget=new Vec3d(Integer.parseInt(clickCoordinates[1])+.5,Integer.parseInt(clickCoordinates[2])+.5,Integer.parseInt(clickCoordinates[3])+.5);
+                    require(mc.player.getLookVec().normalize().dotProduct(clickedTarget.subtract(mc.player.getPositionEyes(1)).normalize())>.999999,"Look at click did not run client command");
+                    pass("Wrapped Look at chat click executes clook; scan leaves view unchanged until completion");
+                    pass("BEST_ITEM_SEARCH_PASSED: scanned three chests, opened 12 apples and faced best chest");
+                    stage=59;mc.shutdown();break;
                 case 50:
                     mc.displayGuiScreen(null);
                     pending=server(() -> {
@@ -699,6 +1189,23 @@ public final class RuntimeTestMod {
         pass("Punch restriction fixture "+fixture+" (equipment/locks/capacity/reach/double/ender/unsupported)");
         restrictionCase++;restrictionPhase=0;
         return restrictionCase==12;
+    }
+    private void dispatchChestRow(int number,boolean keyboard) throws Exception {
+        if(keyboard) {
+            Field bindings=ClientProxy.class.getDeclaredField("swapRows");bindings.setAccessible(true);
+            net.minecraft.client.settings.KeyBinding binding=((net.minecraft.client.settings.KeyBinding[])bindings.get(StorageTweaks.proxy))[number-1];
+            binding.setKeyCode(org.lwjgl.input.Keyboard.KEY_G);
+            try {
+                java.lang.reflect.Method rowKey=ClientProxy.class.getDeclaredMethod("rowKey",net.minecraft.client.gui.GuiScreen.class,int.class);rowKey.setAccessible(true);
+                require((boolean)rowKey.invoke(StorageTweaks.proxy,mc.currentScreen,org.lwjgl.input.Keyboard.KEY_G),"Rebound chest row key did not dispatch");
+            } finally { binding.setKeyCode(0); }
+        } else {
+            net.minecraft.client.gui.GuiButton selected=null;
+            for(net.minecraft.client.gui.GuiButton button:buttons) if(button.displayString.equals(Integer.toString(number))) selected=button;
+            require(selected!=null,"Missing numbered chest row button");
+            MinecraftForge.EVENT_BUS.post(new net.minecraftforge.client.event.GuiScreenEvent.ActionPerformedEvent.Pre(mc.currentScreen,selected,buttons));
+        }
+        require(ClientProxy.JOB.active(),"Chest row operation did not start");
     }
     private void punch(long id,BlockPos pos) throws Exception {
         mc.player.rotationYaw=0;mc.player.rotationPitch=20;

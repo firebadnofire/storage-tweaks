@@ -5,7 +5,7 @@ import net.minecraftforge.common.config.Configuration;
 
 public final class Settings {
     public static Configuration config;
-    public static boolean enabled, chestButtons, inventorySort, finder, punch, hover, caseSensitive, notify;
+    public static boolean enabled, chestButtons, inventorySort, inventorySwap, finder, punch, hover, caseSensitive, notify;
     public static int pace, timeout, searchRadius, searchBlocks, searchMillis, results, interactionPace;
     public static String[] storeExclusions, punchExclusions;
     public static boolean serverPunch;
@@ -14,6 +14,7 @@ public final class Settings {
         enabled = config.getBoolean("enabled", "client", true, "Enable client features");
         chestButtons = config.getBoolean("chestButtons", "client", true, "Take, Store, Sort");
         inventorySort = config.getBoolean("inventorySort", "client", true, "Sort main 27 slots only");
+        inventorySwap = config.getBoolean("inventorySwap", "client", true, "Swap numbered player/chest rows with the hotbar");
         finder = config.getBoolean("finder", "client", true, "Enable finder commands unless clientcommands is present");
         punch = config.getBoolean("punch", "client", true, "Requires compatible server");
         hover = config.getBoolean("hover", "client", true, "Punch availability label");
@@ -22,7 +23,7 @@ public final class Settings {
         pace = config.getInt("clickPaceTicks", "inventory", 1, 1, 20, "Minimum ticks between acknowledged clicks");
         timeout = config.getInt("responseTimeoutTicks", "inventory", 100, 20, 600, "Stop instead of waiting indefinitely");
         storeExclusions = config.getStringList("storeExclusions", "inventory", new String[0], "Exact registry IDs excluded from Store");
-        punchExclusions = config.getStringList("punchExclusions", "punch", new String[0], "Additional protected registry IDs");
+        punchExclusions = config.getStringList("punchExclusions", "punch", new String[0], "Additional registry IDs requiring the punch override key");
         serverPunch = config.getBoolean("enabled", "server", true, "Offer server-authoritative punch deposits");
         searchRadius = config.getInt("radius", "finder", 64, 1, 256, "Also limited to loaded/rendered chunks");
         searchBlocks = config.getInt("blocksPerTick", "finder", 4096, 64, 65536, "Hard work limit");

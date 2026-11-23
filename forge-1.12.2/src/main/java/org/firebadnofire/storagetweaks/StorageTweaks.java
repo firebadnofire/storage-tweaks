@@ -25,6 +25,7 @@ public final class StorageTweaks {
         proxy.preInit();
     }
     @Mod.EventHandler public void init(FMLInitializationEvent event) {
+        org.firebadnofire.storagetweaks.server.PunchAccess.registerReviewedContentMods();
         org.firebadnofire.storagetweaks.server.PunchDepositCommand.registerPermission();proxy.init();
     }
     @Mod.EventHandler public void serverStarting(net.minecraftforge.fml.common.event.FMLServerStartingEvent event) {

@@ -120,12 +120,17 @@ final class Finder {
     }
     private void report(String text,BlockPos pos,double distance) {
         String coords=pos.getX()+" "+pos.getY()+" "+pos.getZ();
-        ITextComponent message=new TextComponentString("[Storage Tweaks] "+text+" ["+coords+"] "+
-                String.format(Locale.ROOT,"%.2f",distance)+"m");
-        message.getStyle().setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND,"/tp "+coords));
+        ITextComponent message=new TextComponentString("[Storage Tweaks] "+text+" ");
+        ITextComponent coordinates=new TextComponentString("["+coords+"]");
+        coordinates.getStyle().setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND,"/tp "+coords));
+        message.appendSibling(coordinates);
         ITextComponent look=new TextComponentString(" [Look at]");
-        look.getStyle().setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,"/clook "+coords));
+        look.getStyle().setColor(TextFormatting.AQUA).setUnderlined(true)
+                .setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,"/clook "+coords))
+                .setHoverEvent(new net.minecraft.util.text.event.HoverEvent(net.minecraft.util.text.event.HoverEvent.Action.SHOW_TEXT,
+                        new TextComponentString("Look at "+coords+" (open chat to click)")));
         message.appendSibling(look);
+        message.appendSibling(new TextComponentString(" "+String.format(Locale.ROOT,"%.2f",distance)+"m"));
         mc.player.sendMessage(message);
     }
     private static ResourceLocation id(String text) throws CommandException {
@@ -367,7 +372,6 @@ final class Finder {
         }
         void openTarget(Target candidate) {
             target=candidate;waiting=true;ready=false;sent=ClientProxy.ticks;
-            LookCommand.lookAt(candidate.point());
             if(candidate.entity!=null) mc.playerController.interactWithEntity(mc.player,candidate.entity,EnumHand.MAIN_HAND);
             else mc.playerController.processRightClickBlock(mc.player,mc.world,candidate.pos,EnumFacing.UP,candidate.point(),EnumHand.MAIN_HAND);
         }

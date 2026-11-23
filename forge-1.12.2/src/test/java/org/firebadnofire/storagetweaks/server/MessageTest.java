@@ -8,12 +8,12 @@ import static org.junit.Assert.*;
 public class MessageTest {
     @Test public void fixedSizeRoundTrip() {
         PunchNetwork.Message before=new PunchNetwork.Message();
-        before.type=3;before.session=123;before.token=77;before.request=1;before.slot=8;before.pos=new BlockPos(-100,63,12);
+        before.enabled=true;before.type=3;before.session=123;before.token=77;before.request=1;before.slot=8;before.pos=new BlockPos(-100,63,12);
         ByteBuf buf=Unpooled.buffer();
         try {
             before.toBytes(buf);assertEquals(46,buf.readableBytes());
             PunchNetwork.Message after=new PunchNetwork.Message();after.fromBytes(buf);
-            assertEquals(before.type,after.type);assertEquals(before.session,after.session);
+            assertTrue(after.enabled);assertEquals(before.type,after.type);assertEquals(before.session,after.session);
             assertEquals(before.token,after.token);assertEquals(before.request,after.request);
             assertEquals(before.pos,after.pos);assertEquals(before.slot,after.slot);
         } finally { buf.release(); }

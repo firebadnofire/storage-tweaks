@@ -326,3 +326,279 @@ concurrent-build mapping failure, and fixture method-mapping failure logs.
 The aiming assertion normalizes Minecraft's lookup-table look vector before
 comparing direction, rather than incorrectly requiring a perfect unit magnitude.
 Live LuckPerms and dedicated-server permission delegation remain unverified.
+
+## Best-match item search, version 0.0.1
+
+Validate.ps1 succeeded (validation-best-item-build.log). The first new client
+exited with native access-violation code -1073741819 during startup, before the
+fixture. The fresh retry validation-best-item-v2-runtime.log exited 0 and passed
+BEST_ITEM_SEARCH_PASSED. Chat reported counts 12, 7, and 3 with [Look at], then
+reported three inspected inventories. Server interactions show the best chest
+reopened after the final candidate. The fixture verified 12 apples in the revealed
+container, matching player look direction, and no retained search suppression.
+This is an integrated-server automated scenario, not a remote physical-click test.
+Mod metadata declares Fire's Storage Tweaks, creator FireBADnoFire, version 0.0.1.
+Project scope is Forge 1.12.2 only; the speculative target matrix and generator
+were removed.
+
+## Stationary scan and chat action regression
+
+Validate.ps1 passed in validation-look-links-build.log. The production item-best
+fixture passed in validation-look-links-runtime.log (exit 0): every scan tick
+retained the starting yaw/pitch until the final reveal; all three matches were
+reported and the 12-apple chest remained selected. The fixture extracted actual
+chat-history components, wrapped them to 70 pixels using Minecraft's own splitter,
+passed a retained Look at component to GuiChat.handleComponentClick, and verified
+the resulting aim matched that link's coordinates. This exercises the real chat
+component handler and client-command dispatch, rather than invoking clook directly.
+It does not claim a physical mouse hit-test. Links require open chat, as ordinary
+Minecraft chat links do.
+
+## Punch failure with Traveler's Backpack, 2026-11-22
+
+Both read-only inspected Prism instances contained Storage Tweaks plus Traveler's
+Backpack 1.0.35, with client and server punch toggles enabled. The blanket unknown-
+mod policy blocked the Backpack distribution. Its exact SHA-256 and event-handler
+review are documented in protocol.md; a digest-bound compatibility rule now admits
+this content mod without bypassing any target/access checks. Unknown builds and
+other unknown mods remain blocked. Personal instances and worlds were not changed.
+
+Validate.ps1 passed (validation-travelers-punch-build.log). Isolated copies of the
+actual Backpack JAR/config passed PUNCH_RECOVERY_PASSED and
+PUNCH_SWITCH_RECOVERY_PASSED in both survival and creative. The fixtures waited for
+real availability negotiation, toggled false/true via the server command, invoked
+the client mouse handler, and verified server-held/chest counts, then switched
+held items and deposited again. Logs: validation-travelers-punch-runtime.log and
+validation-travelers-creative-runtime.log; both exited 0. These are mouse-handler
+fixtures, not physical mouse clicks or remote multiplayer tests.
+
+Required modpack regression used F:/mods.tzs, SHA-256
+9e7af621d9296b1217a1ab7851bea7b856220bf1411890ad843001a4a03ce66d;
+all 39 extracted JAR hashes matched evidence/requested-pack.json. The fresh pack
+run validation-required-pack-punch-fix.log reached ALL PACK RUNTIME TESTS PASSED,
+including client inventory/finder and the expected blocked punch capability.
+After assertions completed and worlds saved, the Windows process exited with
+-1073741819 during shutdown. No hs_err report was produced; the shutdown failure
+is unresolved and this is not a clean process-exit pass. Other pack mods remain
+unreviewed, so the full pack's punch capability is still conservatively disabled.
+
+## Hotbar selection ordering regression
+
+The old same-slot item replacement fixture did not cover real hotbar selection.
+A new high-priority client END-tick fixture switches selected slots immediately
+before availability processing, reproducing the input/synchronization ordering.
+Initial attempts accidentally selected an empty slot and were discarded. The
+corrected fixture against the previous dist binary fails with seven apples held
+and the crosshair still on the chest: validation-hotbar-original-corrected-retry.log.
+
+The fixed production binary passes in survival (validation-hotbar-corrected-fixed.log)
+and creative (validation-hotbar-creative-fixed.log), both exiting 0. Availability
+recovers within the 20-tick fixture bound without looking away; invoking the mouse
+hook deposits seven apples from slot 1, leaves slot 0's ten stone untouched, and
+server-side assertions verify those counts. This tests real selected-slot changes
+and network ordering, but uses a mouse-hook fixture rather than physical input.
+`productionClient -PruntimeMod=<jar>` supports comparison with an existing binary
+in isolated test instances without changing distribution files.
+
+Windows full-pack retry (validation-pack-hotbar-fix.log) failed during startup,
+before runtime assertions. Its hs_err_pid10784.log locates the access violation
+in JNA Native.registerMethod called by NarratorWindows initialization. This is
+separate from the passing Windows hotbar fixtures. A Linux/Xvfb pack run uses the
+same extracted mod set and production binary to avoid that native Windows path.
+The Linux runner now accepts --mode pack and allocates 6 GiB for that pack.
+
+The first Linux pack run stopped at Traveler's Backpack's one-time GuiWarning
+screen (validation-linux-pack-hotbar-fix.log), before gameplay. That mod saved its
+warning flag to false in the isolated instance. The retry passed every pack
+assertion and exited 0 (validation-linux-pack-hotbar-fix-retry.log). All 39 loaded
+pack JAR hashes were verified against the original mods.tzs manifest. Punch
+remains disabled in the full pack for other unreviewed mods, as reported above.
+The tested focused Windows binary is copied to dist with its SHA-256 sidecar.
+
+
+## Row/hotbar exchange validation (2026-11-23)
+
+Shared engine: `:common:test` passes 11 Planner tests and one RequestGate test,
+including 500 seeded exact-stack row swaps, reversal, conservation after every
+click, unchanged other slots, occupied-cursor rejection, incompatible destination
+limits, and matching partial stacks that must exchange without merging.
+`:common:test :forge-1.12.2:build :forge-1.12.2:exportProductionRuntime` exited 0
+(`validation-row-swap-final-build.log`).
+
+Focused runtime mode `row-swap` verifies each numbered button on the actual
+integrated server in survival and creative. It asserts exact names/counts/order
+across all 36 slots, an empty cursor, exactly three buttons, and hidden buttons in
+creative catalogue tabs. The first Windows six-button run exited 0
+(`validation-row-swap-runtime.log`). The expanded Windows run crashed at native
+startup with exit -1073741819 before gameplay (`validation-row-swap-final-runtime.log`);
+this is not counted as a gameplay pass. Linux/Xvfb runs additionally enqueue a
+temporarily bound key for each row with no screen open in both game modes and
+verify all keys initially unbound. These are automated button-event/key-queue
+fixtures, not physical mouse/keyboard tests.
+
+Reproduction uses the existing private-display runner:
+`linux-virtual-display.sh python3 test-harness/linux-client.py --manifest
+forge-1.12.2/build/production-runtime.json --instance <isolated-instance>
+--native-cache <linux-natives> --mode row-swap`.
+Pack mode also runs all twelve row/button/key scenarios after the existing pack
+checks. All clients use master volume 0. Original mods.tzs and personal instances
+remain untouched; 39 reference pack JAR hashes were checked against
+`docs/evidence/requested-pack.json` before the run.
+
+
+Final outcomes: `validation-linux-row-swap-final.log` passed all twelve focused
+server-verified cases and exited 0. Survival and creative screenshots
+`row-swap-0.png` through `row-swap-5.png` were captured; survival and creative
+images were visually inspected for row alignment and absence of a hotbar button.
+
+The first full-pack run (`validation-linux-pack-row-swap.log`) passed all six
+buttons but failed the first synthetic key case. The fixture had hard-coded F10,
+which the pack already binds to `key.debug.desc`. The fixture now chooses an
+unused key rather than assuming a free binding. The retry logs that existing
+F10 binding and its selected free key (102). All twelve row scenarios and all
+preceding pack checks passed, with process exit 0
+(`validation-linux-pack-row-swap-retry.log`). This run uses the final distribution
+binary. Pack screenshots were also inspected. Unknown server integrations still
+disable punch conservatively; these results do not extend punch compatibility.
+
+Final `scripts/Validate.ps1` exited 0 (`validation-row-swap-distribution.log`):
+17 tests total (12 common, 5 Forge adapter/protocol), production/source JAR build,
+and exclusion checks for runtime-test and bundled Forge classes. The exact
+pack-tested production JAR is staged in dist with a SHA-256 sidecar:
+`64c6b0aa5e824c2b8cc2f193e29c7f2c2dcedf9184fb10c6c07569592558c9e9`.
+No new dedicated multiplayer row-swap or physical key-input test was performed;
+the new scenarios use integrated-server packet transactions and queued keys.
+
+
+## Immediate punch after rapid hotbar changes (2026-11-23)
+
+Target remains Forge 1.12.2 / 14.23.5.2864, Java 8u472. The client now consumes
+eligible deposit attempts without requiring item-specific hover authorization,
+synchronizes the held slot before sending, intercepts keyboard attack input before
+vanilla processes it, and clears held attack input. The server guards vanilla
+break packets only for confirmed clients opting into punch while global capability
+is enabled. Inventory mutations still require independently validated requests.
+
+Build/test command: `gradlew.bat --no-daemon :common:test :forge-1.12.2:build
+:forge-1.12.2:exportProductionRuntime`, with the established isolated JDK/cache.
+`validation-immediate-punch-input-build.log` exited 0. All 21 tests passed:
+11 Planner, 3 RequestGate, 2 RequestBudget, 3 InventoryIdentity, 2 Message tests.
+The burst budget tests include concurrent calls and window reset; replay, stale
+IDs, and mismatched selections remain rejected even when requests share a tick.
+
+Runtime commands use `linux-virtual-display.sh python3 test-harness/linux-client.py`
+with the exported production manifest, an isolated instance and native cache;
+`--mode rapid-punch` and `--mode rapid-punch-creative` select the new fixtures.
+All clients use 0% master volume and private Xvfb/software rendering. The creative
+instance also contains the exact reviewed Traveler's Backpack 1.0.35 JAR from the
+supplied pack. The original archive and personal Prism instances are untouched.
+
+The previous dist JAR reproduces attack fall-through without a current label
+(`validation-rapid-punch-original-retry.log`, stage 92). The first original run
+stopped before negotiation was ready, and initial fixed runs lacked a valid target
+wait; those are failures, not claimed passes (`validation-rapid-punch-original.log`,
+`validation-rapid-punch-fixed.log`, `validation-rapid-punch-creative-backpack.log`).
+
+The corrected survival run exposed the old pre-scheduling 20 ms filter dropping
+one legitimate request during tick catch-up: 51 apples deposited, three remained
+held (`validation-rapid-punch-fixed-retry.log`). No items were lost. Replacing
+spacing with a bounded 40-message/second window allowed the complete burst
+(`validation-rapid-punch-burst-fixed.log`). The initial creative/controller test
+exposed START_DESTROY preceding Forge's client event, then a stale selected-slot
+packet in the direct controller fixture (`validation-rapid-punch-creative-burst-fixed.log`,
+`validation-rapid-punch-guard-creative.log`). Production mouse/key input now sends
+its held-slot update before either attack path; the direct controller fixture
+explicitly applies that ordering too. A negotiated server break guard protects
+the server mutation; a client preference message prevents it blocking mining
+when client punch is disabled.
+
+Final focused runs exited 0:
+- `validation-rapid-punch-survival-input-fixed.log`: all nine selected stacks,
+  totaling 54 apples, deposited exactly once. Eight real availability replies
+  delayed by two seconds. Chest and cursor invariants held.
+- `validation-rapid-punch-creative-input-fixed.log`: same exact counts and chest
+  survival with Traveler's Backpack loaded. One real availability reply delayed
+  by two seconds. Both runs verified that disabling client punch leaves a server
+  LeftClickBlock event uncancelled, restoring normal mining.
+
+The attack fixtures alternate the mouse hook and actual controller/block-event
+path, explicitly switch slots and click in the same frame, and clear label
+identity first. They also exercise held-attack clearing. These are automated
+input/controller tests, not physical keyboard tests or a new dedicated-server
+latency test. Probe replies are delayed on the actual local-channel pipeline;
+deposit packets themselves are not artificially delayed. Early latency hooks
+placed after Forge's custom-packet handler saw no replies; the final hook runs
+before that handler and asserts that real replies were intercepted.
+
+
+Broader regression outcomes: `validation-pack-immediate-punch.log` exited 0 with
+ALL PACK RUNTIME TESTS PASSED, after all 39 archive mod hashes were rechecked.
+This includes inventory/finder/rejection/timeout checks and all twelve row-swap
+cases. Punch remains disabled in that full pack for other unreviewed mods; the
+focused Backpack test is the positive modded punch test. The minimal
+`validation-integrated-immediate-punch.log` also exited 0: inventory/finder checks,
+punch restrictions 0–11, actual dimension/session renewal, and twelve row cases
+passed. That harness currently terminates at the row-suite marker, so this run
+is not evidence of rerunning its later creative GUI/command stages. Those stages
+are outside this rapid-punch validation claim.
+
+The final production/source JARs were built successfully, and the production JAR
+was checked to include RequestBudget but exclude runtime fixtures and bundled
+Forge implementation classes. SHA-256 matches between the build output, both
+focused instances, the full pack instance, and the staged client/server JAR:
+`2b62af10dec079cf2b5355476093bac85d88192cd389305f39111cd6ca151adc`.
+The same tested binary replaces dist's testing JAR; no installation or release
+was modified automatically. Both client and server must update for the burst
+budget and creative server break guard. The older row-swap artifact digest above
+is retained only as historical evidence.
+
+
+## Chest row swaps and protected-item override (2026-11-23)
+
+Build: JDK 8, Gradle 4.9; `:common:test :forge-1.12.2:build
+:forge-1.12.2:exportProductionRuntime` exited 0 (`validation-chest-row-ready-build.log`).
+All 22 unit tests passed, including every mapped player/chest row in 27/54-slot
+storage, exact conservation, unaffected rows and reversal after every exchange.
+
+Runtime runner: `wsl.exe -d Ubuntu -u root -- env
+ST_GUI_TOOLS=/mnt/f/storage-tweaks-validation/linux-tools sh
+/mnt/f/git/storage-tweaks/test-harness/linux-virtual-display.sh python3
+/mnt/f/git/storage-tweaks/test-harness/linux-client.py --manifest
+/mnt/f/git/storage-tweaks/forge-1.12.2/build/production-runtime.json --instance
+<isolated-instance> --native-cache /mnt/f/storage-tweaks-validation/linux-natives
+--mode <mode>`. These are private Linux/Xvfb clients with master volume zero.
+
+Modes `chest-rows` (minimal survival) and `chest-rows-creative --heap-gb 6`
+(the exact 39-JAR F:/mods.tzs baseline) both reached ALL CHEST ROW SWAP TESTS PASSED.
+Logs: validation-chest-row-swaps-retry.log and validation-pack-chest-row-swaps.log.
+Each exercises all six small-chest and nine double-chest row choices, then reverses
+each in the same GUI: 30 complete row exchanges per run. Whole client and server
+containers and empty cursors are checked, including named stacks, partial stacks,
+empty slots and a nonstackable sword. Button and rebound-key dispatch alternate.
+Nine bindings start unbound; row buttons remain available with Take/Store/Sort disabled.
+Screenshots chest-rows-small.png and chest-rows-large.png in each instance were
+captured; the large layouts were visually inspected, including the pack's JEI overlay.
+These are synthetic Forge button/key-dispatch tests on an integrated server,
+not physical input or a fresh dedicated-server test. An initial fixture run failed
+because it tried opening before world/teleport readiness; the corrected fixture
+waits for world readiness and the expected GUI before testing any swap.
+
+Protected-item modes tool-override and tool-override-creative passed all eight cases
+in validation-tool-override-survival.log and validation-tool-override-creative.log:
+axe (named, damaged, enchanted), hoe, sword, bow, shears, elytra, configured diamond,
+and ordinary apple. Without override the protected-item request is rejected and
+normal tool attack remains available; with override exact items deposit and the
+chest survives. Default Shift and rebound G are checked independently of crouching;
+the SHIFT/G label screenshots were visually inspected. Key state is synthetic.
+The positive creative test includes the reviewed Backpack build. The full 39-mod
+pack still disables punch for other unreviewed mods; this row test does not change
+that policy or claim positive punch compatibility for the entire pack.
+
+The final production binary also passed tool-override-creative on the reviewed
+Backpack instance (`validation-tool-override-final.log`, exit 0, all eight cases).
+Minimal chest-row run exited 0; the pack run completed its success marker and
+normal shutdown. All three instances contain the same production JAR, SHA-256
+`94d7dad7519369de5d34a5dd1cbd606b9478a48112cc2c21d8221c3aed8ec59a`. This exact JAR is staged in dist with its checksum;
+production contents were checked to exclude runtime fixtures and bundled Forge
+implementation classes. Source artifact also built successfully. No personal
+instance, original archive, release or Git commit was changed by this validation.

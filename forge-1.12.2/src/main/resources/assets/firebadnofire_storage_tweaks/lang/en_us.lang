@@ -1,3 +1,13 @@
 key.storage_tweaks.settings=Storage Tweaks Settings
 key.storage_tweaks.cancel=Cancel Storage Tweaks Operation
 key.categories.storage_tweaks=Storage Tweaks
+key.storage_tweaks.swap1=Swap Row 1 with Hotbar
+key.storage_tweaks.swap2=Swap Row 2 with Hotbar
+key.storage_tweaks.swap3=Swap Row 3 with Hotbar
+key.storage_tweaks.punchOverride=Override Punch Deposit Protection (Hold)
+key.storage_tweaks.swap4=Swap Row 4 with Hotbar
+key.storage_tweaks.swap5=Swap Row 5 with Hotbar
+key.storage_tweaks.swap6=Swap Row 6 with Hotbar
+key.storage_tweaks.swap7=Swap Row 7 with Hotbar
+key.storage_tweaks.swap8=Swap Row 8 with Hotbar
+key.storage_tweaks.swap9=Swap Row 9 with Hotbar

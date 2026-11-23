@@ -32,6 +32,10 @@ public final class PunchDepositCommand extends CommandBase {
         Settings.config.save();Settings.serverPunch=enabled;
         PunchNetwork.refreshCapabilities(server);
         sender.sendMessage(new TextComponentString("[Storage Tweaks] Server punch deposit "+(enabled?"enabled":"disabled")+" (saved). Access and protection checks still apply."));
+        if(enabled) {
+            String blocker=PunchAccess.blocker();
+            if(!blocker.isEmpty()) sender.sendMessage(new TextComponentString("[Storage Tweaks] Punch is still unavailable: "+blocker));
+        }
     }
     @Override public List<String> getTabCompletions(MinecraftServer server,ICommandSender sender,String[] args,BlockPos pos) {
         return args.length==1?getListOfStringsMatchingLastWord(args,"true","false"):java.util.Collections.emptyList();

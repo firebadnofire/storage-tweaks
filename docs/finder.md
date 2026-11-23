@@ -27,9 +27,16 @@ positions. Searches cancel on world changes, disconnect, death, or feature disab
 Item searches automatically use normal right-click interactions with loaded,
 reachable vanilla chests, ender chests, shulker boxes, and chest minecarts.
 Intermediate screens are suppressed. Only initial server-supplied inventory contents
-are inspected; player slots are excluded. Nonmatches close normally. The first
-match remains open using the same screen, container and window ID, and its current
-item count and location are reported. Double chests and ender inventory are
+are inspected; player slots are excluded. Each inspected container closes normally after its matching count is recorded.
+Positive matches are reported with coordinates and clickable `[Look at]` text
+running `/clook`. After every reachable candidate has been inspected, the container
+with the largest observed matching count is opened again and checked using fresh
+server contents. The player faces its center using the same aiming implementation
+as `/clook`, and its actual screen/container is revealed without an extra reopen.
+If that final match has disappeared or become unreachable, the search stops with
+an explicit message. Counts are observations rather than an atomic world snapshot.
+Ties retain the nearer candidate. Chat results obey the configured display limit;
+all candidates are still scanned and omitted positive results are summarized. Double chests and ender inventory are
 deduplicated. Shulker item contents are inspected to depth 4 with a 4096-stack limit.
 No cached remote inventories or privileged NBT queries are used.
 
@@ -44,7 +51,7 @@ manual recovery. It avoids automatically closing that window, because vanilla
 closure can drop a cursor stack when the player's inventory is full.
 Server-denied containers and timeouts can make results incomplete. A continuing
 search repeats available inventories after a paced cycle and can discover changed
-contents and newly reachable inventories. It stops on the first match. Candidate
+contents and newly reachable inventories. It selects the best observed match after a complete scan, stopping when a cycle has matches. Candidate
 collection is incremental and bounded; nested or candidate-budget exhaustion is
 reported as incomplete, and truncated positive counts are reported as a lower bound.
 
@@ -57,7 +64,12 @@ and 4096 positions per tick; 20 displayed results; four ticks between interactio
 `/clook <x> <y> <z>` turns the local player's view toward the center of the
 specified block. Legacy `~` relative block coordinates are accepted. It does not
 move, open a container, interact, or require OP/server support. Finder results
-include a clickable `[Look]` action using the result coordinates, including item
+include a clickable `[Look at]` action using the result coordinates, including item
 search container locations. Coordinate clicks still suggest `/tp`. Existing clook
 registrations are preserved with a diagnostic. This command registers independently
 of the three finder commands; clientcommands presence still suppresses those three.
+
+Item-search checks do not rotate the camera. Only the completed best-match reveal
+automatically faces its target. [Look at] is aqua and underlined with a hover hint;
+open chat with T to click it. Coordinates and the look link are separate styled
+components so wrapped lines retain their independent click actions.

@@ -29,6 +29,64 @@ public class PlannerTest {
         assertEquals(previous, plan.result);
         assertTrue(plan.result.cursor.empty());
     }
+    @Test public void rowSwapsPreserveExactStacksAndAreReversible() {
+        Random random = new Random(314159);
+        for (int sample = 0; sample < 500; sample++) {
+            Stack[] items = new Stack[36];
+            for (int i = 0; i < 36; i++) { int id = random.nextInt(8); items[i] = item(id, random.nextInt(id == 3 ? 2 : 65)); }
+            Snapshot before = snapshot(items);
+            int first = 9 + 9 * (sample % 3);
+            Plan plan = Planner.swapRows(before, range(first, first + 9), range(0, 9));
+            for (Plan.Click click : plan.clicks) {
+                assertTrue(click.after.cursor.empty());
+                assertEquals(Planner.counts(before), Planner.counts(click.after));
+                for (int i = 0; i < 36; i++) if (i != click.slot && i != click.hotbarButton)
+                    assertEquals(click.before.slots.get(i), click.after.slots.get(i));
+            }
+            for (int i = 0; i < 9; i++) {
+                assertEquals(before.slots.get(i), plan.result.slots.get(first + i));
+                assertEquals(before.slots.get(first + i), plan.result.slots.get(i));
+            }
+            assertEquals(before, Planner.swapRows(plan.result, range(first, first + 9), range(0, 9)).result);
+        }
+    }
+    @Test(expected=IllegalArgumentException.class) public void rowSwapRejectsOccupiedCursor() {
+        Stack[] items = new Stack[18]; Arrays.fill(items, Stack.EMPTY);
+        int[] limits = new int[18]; Arrays.fill(limits, 64);
+        Planner.swapRows(new Snapshot(Arrays.asList(items), item(0, 1), limits), range(9,18), range(0,9));
+    }
+
+    @Test(expected=IllegalArgumentException.class) public void rowSwapRejectsInsufficientDestinationLimit() {
+        Stack[] items = new Stack[18]; Arrays.fill(items, Stack.EMPTY); items[9] = item(0, 32);
+        int[] limits = new int[18]; Arrays.fill(limits, 64); limits[0] = 16;
+        Planner.swapRows(new Snapshot(Arrays.asList(items), Stack.EMPTY, limits), range(9,18), range(0,9));
+    }
+    @Test public void rowSwapDoesNotMergeMatchingPartialStacks() {
+        Stack[] items = new Stack[18]; Arrays.fill(items, Stack.EMPTY); items[0] = item(0, 3); items[9] = item(0, 7);
+        Plan plan = Planner.swapRows(snapshot(items), range(9,18), range(0,9));
+        assertEquals(1, plan.clicks.size()); assertEquals(0, plan.clicks.get(0).hotbarButton);
+        assertEquals(7, plan.result.slots.get(0).count); assertEquals(3, plan.result.slots.get(9).count);
+    }
+
+    @Test public void chestRowsSwapWithMappedHotbarWithoutTouchingOtherRows() {
+        for(int storageSize:new int[]{27,54}) {
+            Stack[] items=new Stack[storageSize+36];
+            for(int i=0;i<items.length;i++) items[i]=item(0,1+i%63);
+            Snapshot before=snapshot(items);
+            for(int first=0;first<storageSize+27;first+=9) {
+                Plan plan=Planner.swapRows(before,range(first,first+9),range(storageSize+27,storageSize+36));
+                for(int i=0;i<9;i++) {
+                    assertEquals(items[storageSize+27+i],plan.result.slots.get(first+i));
+                    assertEquals(items[first+i],plan.result.slots.get(storageSize+27+i));
+                }
+                for(Plan.Click click:plan.clicks) for(int i=0;i<items.length;i++)
+                    if(i!=click.slot && i!=storageSize+27+click.hotbarButton)
+                        assertEquals(click.before.slots.get(i),click.after.slots.get(i));
+                assertEquals(before,Planner.swapRows(plan.result,range(first,first+9),range(storageSize+27,storageSize+36)).result);
+            }
+        }
+    }
+
     @Test public void transferMergesBeforeEmptyAndLeavesRemainder() {
         Snapshot before = snapshot(item(0,64), item(0,0), item(0,60));
         Plan plan = Planner.transfer(before, new int[]{0}, new int[]{1,2});

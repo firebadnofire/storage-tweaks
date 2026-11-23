@@ -20,8 +20,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--manifest', required=True, type=Path)
 parser.add_argument('--instance', required=True, type=Path)
 parser.add_argument('--native-cache', required=True, type=Path)
-parser.add_argument('--mode', choices=['integrated', 'contention', 'vanilla', 'optional-server'], default='integrated')
+parser.add_argument('--mode', choices=['integrated', 'contention', 'vanilla', 'optional-server', 'pack', 'row-swap', 'rapid-punch', 'rapid-punch-creative', 'tool-override', 'tool-override-creative', 'chest-rows', 'chest-rows-creative'], default='integrated')
 parser.add_argument('--name', default='StorageTest')
+parser.add_argument('--heap-gb', type=int, choices=[2, 6], help='Explicit isolated client heap; default 6 for pack, otherwise 2')
 args = parser.parse_args()
 if not os.environ.get('DISPLAY') or os.environ['DISPLAY'] == ':0':
     parser.error('Run through linux-virtual-display.sh on a private display')
@@ -70,7 +71,7 @@ options = args.instance / 'options.txt'
 lines = options.read_text().splitlines() if options.exists() else []
 lines = [line for line in lines if not line.startswith(('soundCategory_master:', 'limitFramerate:', 'pauseOnLostFocus:'))]
 options.write_text('\n'.join(lines + ['soundCategory_master:0.0', 'limitFramerate:30', 'pauseOnLostFocus:false']) + '\n')
-command = [str(Path(os.environ['JAVA_HOME']) / 'bin/java'), '-Xmx2G',
+command = [str(Path(os.environ['JAVA_HOME']) / 'bin/java'), '-Xmx%dG' % (args.heap_gb or (6 if args.mode == 'pack' else 2)),
            '-Djava.library.path=' + str(args.native_cache),
            '-Djava.io.tmpdir=' + str(args.instance / 'tmp'),
            '-DstorageTweaks.runtimeTest=true', '-DstorageTweaks.runtimeMode=' + args.mode,

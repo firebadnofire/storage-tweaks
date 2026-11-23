@@ -141,6 +141,11 @@ task productionClient(type: JavaExec, dependsOn: ['jar', 'reobfJar', 'runtimeTes
                 into new File(workingDir, 'mods')
             }
         }
+        if(project.hasProperty('runtimeMod')) {
+            def testedMod=file(project.property('runtimeMod'))
+            if(!testedMod.isFile()) throw new GradleException('runtimeMod must point to an existing test JAR')
+            copy { from testedMod; into new File(workingDir, 'mods'); rename { jar.archivePath.name } }
+        }
         def libraries = sourceSets.main.runtimeClasspath.filter {
             !it.absolutePath.startsWith(buildDir.absolutePath) &&
             !it.absolutePath.startsWith(project(':common').buildDir.absolutePath) &&

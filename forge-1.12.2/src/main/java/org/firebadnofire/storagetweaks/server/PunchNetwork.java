@@ -22,26 +22,26 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.items.ItemHandlerHelper;
 import org.firebadnofire.storagetweaks.*;
 import org.firebadnofire.storagetweaks.protocol.RequestGate;
+import org.firebadnofire.storagetweaks.protocol.RequestBudget;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 public final class PunchNetwork {
     public static final int VERSION=1;
     public static SimpleNetworkWrapper channel;
     private static final SecureRandom RANDOM=new SecureRandom();
     private static final Map<UUID,Session> SESSIONS=new HashMap<>();
-    private static final Map<UUID,AtomicLong> ARRIVALS=new ConcurrentHashMap<>();
-    private static final Map<UUID,AtomicLong> PROBE_ARRIVALS=new ConcurrentHashMap<>();
+    private static final Map<UUID,RequestBudget> ARRIVALS=new ConcurrentHashMap<>();
+    private static final Map<UUID,RequestBudget> PROBE_ARRIVALS=new ConcurrentHashMap<>();
     private static class Session {
         long session=RANDOM.nextLong(), token, issued;
         long previousToken,previousIssued;
         boolean issuedToken,hasPrevious;
-        boolean confirmed;
+        boolean confirmed,clientPunch,clientOverride;
         int offers;
-        RequestGate gate=new RequestGate();
-        RequestGate probeGate=new RequestGate();
+        RequestGate gate=new RequestGate(0);
+        RequestGate probeGate=new RequestGate(0);
     }
     /** Fixed-size packets: no client-supplied item data or arbitrary inventory slot mutations. */
     public static class Message implements IMessage {
@@ -67,9 +67,8 @@ public final class PunchNetwork {
     public static class ServerHandler implements IMessageHandler<Message,IMessage> {
         @Override public IMessage onMessage(Message message, MessageContext context) {
             EntityPlayerMP player=context.getServerHandler().player;
-            AtomicLong last=(message.type==5?PROBE_ARRIVALS:ARRIVALS).computeIfAbsent(player.getUniqueID(),id -> new AtomicLong());
-            long now=System.nanoTime(), previous=last.get();
-            if(now-previous<20_000_000L || !last.compareAndSet(previous,now)) return null;
+            RequestBudget budget=(message.type==5?PROBE_ARRIVALS:ARRIVALS).computeIfAbsent(player.getUniqueID(),id -> new RequestBudget());
+            if(!budget.allow(System.nanoTime())) return null;
             player.getServerWorld().addScheduledTask(() -> receive(player,message)); return null;
         }
     }
@@ -78,6 +77,21 @@ public final class PunchNetwork {
         channel.registerMessage(ClientHandler.class,Message.class,0,Side.CLIENT);
         channel.registerMessage(ServerHandler.class,Message.class,1,Side.SERVER);
         MinecraftForge.EVENT_BUS.register(new PunchNetwork());
+    }
+    @SubscribeEvent public void protectDepositAttack(PlayerInteractEvent.LeftClickBlock event) {
+        if(event.getWorld().isRemote || !(event.getEntityPlayer() instanceof EntityPlayerMP)) return;
+        EntityPlayerMP player=(EntityPlayerMP)event.getEntityPlayer();
+        Session session=SESSIONS.get(player.getUniqueID());
+        if(session==null || !session.confirmed || !session.clientPunch || !Settings.serverPunch || !PunchAccess.blocker().isEmpty() ||
+                player.openContainer!=player.inventoryContainer || !eligible(player.getHeldItemMainhand(),session.clientOverride) ||
+                !player.world.isBlockLoaded(event.getPos())) return;
+        Block block=player.world.getBlockState(event.getPos()).getBlock();
+        if(block.getClass()!=BlockChest.class && block.getClass()!=BlockEnderChest.class) return;
+        // 1.12's creative controller sends START_DESTROY before its client event.
+        // Suppress only that vanilla mutation; deposits still require a fresh,
+        // independently validated protocol request. Unmodded sessions are untouched.
+        event.setCanceled(true);
+        player.connection.sendPacket(new net.minecraft.network.play.server.SPacketBlockChange(player.world,event.getPos()));
     }
     @SubscribeEvent public void login(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.player instanceof EntityPlayerMP)) return;
@@ -134,29 +148,36 @@ public final class PunchNetwork {
         else if(session.hasPrevious && message.token==session.previousToken) tokenIssued=session.previousIssued;
         else return;
         if(now<tokenIssued || now-tokenIssued>200) return;
-        if (message.type==1) { session.confirmed=true; offer(player,session,2); return; }
+        if (message.type==1) { session.confirmed=true;session.clientPunch=message.enabled;session.clientOverride=message.slot==1;offer(player,session,2);return; }
+        if(message.type==7 && session.confirmed) { session.clientPunch=message.enabled;session.clientOverride=message.slot==1;return; }
         if ((message.type!=3 && message.type!=5) || !session.confirmed || !Settings.serverPunch) return;
         boolean probe=message.type==5;
-        if (!(probe?session.probeGate:session.gate).consume(message.request,now,tokenIssued,message.slot,player.inventory.currentItem)) return;
-        int deposited=deposit(player,message.pos,!probe);
+        boolean accepted=(probe?session.probeGate:session.gate).consume(message.request,now,tokenIssued,message.slot,player.inventory.currentItem);
+        if(!accepted && !probe) return;
+        // A valid session's rejected probe still needs a response so slot-update
+        // races and throttling cannot strand client availability until timeout.
+        int deposited=accepted?deposit(player,message.pos,!probe,message.enabled):0;
         if(Boolean.getBoolean("storageTweaks.runtimeTest") && !probe) StorageTweaks.LOG.info("PUNCH_TRACE deposited={}",deposited);
         Message response=new Message(); response.type=probe?6:4; response.session=session.session; response.token=message.token;
         response.request=message.request; response.pos=message.pos;response.slot=message.slot;
         response.enabled=deposited>0;response.count=deposited; channel.sendTo(response,player);
     }
-    public static boolean eligible(ItemStack stack) {
-        if (stack.isEmpty()) return false;
+    public static boolean requiresOverride(ItemStack stack) {
+        if(stack.isEmpty()) return false;
         Item item=stack.getItem();
-        if (item instanceof ItemTool || item instanceof ItemHoe || item instanceof ItemSword || item instanceof ItemBow ||
-                item instanceof ItemShears || stack.isItemStackDamageable() || !item.getToolClasses(stack).isEmpty()) return false;
-        return !Arrays.asList(Settings.punchExclusions).contains(String.valueOf(item.getRegistryName()));
+        return item instanceof ItemTool || item instanceof ItemHoe || item instanceof ItemSword || item instanceof ItemBow ||
+                item instanceof ItemShears || stack.isItemStackDamageable() || !item.getToolClasses(stack).isEmpty() ||
+                Arrays.asList(Settings.punchExclusions).contains(String.valueOf(item.getRegistryName()));
     }
-    private static int deposit(EntityPlayerMP player,BlockPos pos,boolean mutate) {
+    public static boolean eligible(ItemStack stack,boolean override) {
+        return !stack.isEmpty() && (override || !requiresOverride(stack));
+    }
+    private static int deposit(EntityPlayerMP player,BlockPos pos,boolean mutate,boolean override) {
         if(Boolean.getBoolean("storageTweaks.runtimeTest") && mutate)
             StorageTweaks.LOG.info("PUNCH_TRACE alive={} spectator={} container={} cursor={} eligible={} loaded={}",player.isEntityAlive(),player.isSpectator(),
-                    player.openContainer==player.inventoryContainer,player.inventory.getItemStack(),eligible(player.getHeldItemMainhand()),player.world.isBlockLoaded(pos));
+                    player.openContainer==player.inventoryContainer,player.inventory.getItemStack(),eligible(player.getHeldItemMainhand(),override),player.world.isBlockLoaded(pos));
         if (!player.isEntityAlive() || player.isSpectator() || player.openContainer!=player.inventoryContainer ||
-                !player.inventory.getItemStack().isEmpty() || !eligible(player.getHeldItemMainhand()) ||
+                !player.inventory.getItemStack().isEmpty() || !eligible(player.getHeldItemMainhand(),override) ||
                 !player.world.isBlockLoaded(pos) || player.getServer()==null) return 0;
         double reach=player.getEntityAttribute(EntityPlayer.REACH_DISTANCE).getAttributeValue();
         Vec3d eyes=player.getPositionEyes(1); RayTraceResult hit=player.world.rayTraceBlocks(eyes,eyes.add(player.getLookVec().scale(reach)),false,true,false);
@@ -188,7 +209,7 @@ public final class PunchNetwork {
         } else return 0;
         PlayerInteractEvent.RightClickBlock event=new PlayerInteractEvent.RightClickBlock(player,EnumHand.MAIN_HAND,pos,hit.sideHit,hit.hitVec);
         if (MinecraftForge.EVENT_BUS.post(event) || event.getUseBlock()==Event.Result.DENY) return 0;
-        if (!PunchAccess.allowed(player,pos) || player.world.getTileEntity(pos)!=original || !eligible(player.getHeldItemMainhand())) return 0;
+        if (!PunchAccess.allowed(player,pos) || player.world.getTileEntity(pos)!=original || !eligible(player.getHeldItemMainhand(),override)) return 0;
         for(Map.Entry<BlockPos,TileEntity> target:accessed.entrySet()) {
             if(player.world.getTileEntity(target.getKey())!=target.getValue() || !PunchAccess.allowed(player,target.getKey())) return 0;
         }

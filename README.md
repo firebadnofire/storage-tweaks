@@ -2,7 +2,8 @@
 
 An independently implemented inventory and finder mod. The current implementation
 targets **Minecraft 1.12.2 / Forge 14.23.5.2864**. It is a development build with
-runtime-tested scenarios, not a claim of complete modpack or multiversion support.
+runtime-tested scenarios. The sole target is Forge 1.12.2; modpack compatibility
+is limited to the documented tests.
 See [compatibility](docs/compatibility.md) and [testing](docs/testing.md).
 
 ## Features
@@ -11,13 +12,18 @@ See [compatibility](docs/compatibility.md) and [testing](docs/testing.md).
   and Store include the hotbar; Store does not exclude tools by default.
 - Sort in the survival inventory and creative player-inventory tab consolidates and orders the main 27 slots
   by displayed name. Hotbar, armor, offhand, and crafting slots stay untouched.
+- Row-swap buttons to the left of the survival inventory, creative player-inventory tab, and small/double chests:
+  **3** exchanges the top row with the hotbar, **2** the middle, and **1** the bottom.
+  Both rows keep their column order and exact stacks; compatible stacks do not merge.
+  Chest rows continue upward: **4-6** in a small chest, **4-9** in a double chest.
+  The hotbar has no button. Armor, offhand, crafting, and unselected rows are untouched.
 - Legal, paced inventory clicks with confirmation, state checks, and a timeout.
   An interrupted operation preserves cursor contents; put them away normally.
 - Client-side `/cfind`, `/cfindblock`, and `/cfinditem`. Item search interacts with
-  reachable storage normally, hides intermediate screens, and shows the original
+  reachable storage normally, hides intermediate screens, and shows the final
   best matching container screen. [Exact syntax and limitations](docs/finder.md).
 - Negotiated server-authoritative punch deposit into vanilla chests and ender
-  chests, without opening their GUI. Tools and damageable equipment are protected.
+  chests, without opening their GUI. Tools and damageable equipment require a held override key, initially Left Shift.
 
 Client inventory controls and finder commands work without a server installation.
 A server installation accepts clients without the mod. **Only punch deposit needs
@@ -29,11 +35,26 @@ Install the `*-mc1.12.2-forge.jar` in the Forge instance's `mods` directory. Do 
 install the sources or runtime-test JAR. Dedicated servers use the same mod JAR.
 Java 8 is the tested runtime. Back up worlds before testing development software.
 
-Use Mods â†’ Storage Tweaks â†’ Config, or the rebindable P settings shortcut. If P is
+Use Mods â†' Storage Tweaks â†' Config, or the rebindable P settings shortcut. If P is
 already assigned, the shortcut starts unbound; assign it in Controls. A cancel
 shortcut is also available, initially unbound. Feature toggles, pacing, search
 budgets, exclusions, and capability status are available in settings. Configuration
 is persisted by Forge.
+
+The nine **Swap Row N with Hotbar** bindings in Controls start unbound.
+Rows 1-3 work in player inventory, supported chests, or with no screen open;
+rows 4-9 require a chest containing that row. Numbering runs upward from the
+player row nearest the hotbar. Disable the separate
+`inventorySwap` setting to disable row buttons and bindings. Swaps require an empty
+cursor and no other inventory operation or item search; manual interaction or an
+inventory change stops the remaining swaps safely. A row swap consists of up to
+nine acknowledged exchanges, so an interrupted operation may be partly complete.
+
+**Override Punch Deposit Protection (Hold)** is rebindable in Controls and defaults
+to Left Shift. Protected tools, weapons, damageable equipment, and configured
+`punchExclusions` items deposit only while it is held. Their availability label
+shows `[SHIFT]` underneath, or the rebound key (`[UNBOUND]` if unassigned).
+All server access and capacity checks still apply.
 
 When loader mod ID `clientcommands` is present, all three finder commands and their
 services are skipped. Other command-name collisions are skipped with a log message.
@@ -44,7 +65,7 @@ The upstream mod is a read-only behavioral reference, not a runtime dependency.
 | Command | Operation |
 | --- | --- |
 | `/punchdeposit <true\|false>` | Server-wide persisted punch toggle. Console/admins on dedicated servers; singleplayer owner needs no OP. |
-| `/clook <x> <y> <z>` | Aim at the center of a block, without moving or interacting. Supports `~` relative coordinates. Finder results include a clickable Look action. |
+| `/clook <x> <y> <z>` | Aim at the center of a block, without moving or interacting. Supports `~` relative coordinates. Finder results include an aqua, underlined [Look at] action; open chat (T) to click it. |
 | `/cfind <selector-or-name-or-UUID> [--keep-searching]` | Find entities known to the client. |
 | `/cfindblock <block> [metadata-or-state-properties] [--keep-searching]` | Find blocks in loaded chunks. Inline `<block>[property=value,...]` is also supported. |
 | `/cfinditem <item> [metadata] [--keep-searching]` | Inspect reachable storage through normal interactions; scan all reachable containers and open the one with the most matches. |
@@ -76,8 +97,16 @@ server mod is required. See [finder details and limits](docs/finder.md).
 Only explicitly recognized vanilla handlers are admitted. Arbitrary modded
 containers are unsupported. The label requires a recent positive server access
 and capacity probe; the actual punch validates access again.
-There is currently no third-party protection integration: any additional unreviewed
-server mod disables punch conservatively. See [the protocol](docs/protocol.md).
+On a compatible enabled server, eligible chest clicks attempt deposit immediately;
+they do not wait for the hover label. Slot synchronization precedes the request.
+Full or denied deposits never fall through to mining. To break a chest, hold an
+empty hand or protected tool without holding the override, or disable client punch. Update both client and
+server JARs to receive the improved rapid-click handling. Network/server processing
+time still applies; the hover label remains server-confirmed.
+
+There is currently no third-party protection integration: additional unreviewed
+server mods disable punch conservatively. The reviewed Traveler's Backpack 1.0.35
+build is supported alongside vanilla-storage punch. See [the protocol](docs/protocol.md).
 
 Entity and block searches can reveal terrain-obscured data already sent to the
 client. Multiplayer rules may restrict their use. Searches never load distant
@@ -107,3 +136,6 @@ and actual upstream licenses are recorded in [licensing](docs/licensing.md) and
 
 
 Version: **0.0.1**. Creator: **FireBADnoFire**.
+
+Item search leaves your view unchanged while inspecting containers. It faces the
+selected best match only after the scan finishes.

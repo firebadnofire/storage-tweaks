@@ -67,6 +67,25 @@ public final class Planner {
         return planner.finish();
     }
 
+    /** Both arrays are ordered left to right; hotbar entries correspond to number keys 1..9. */
+    public static Plan swapRows(Snapshot snapshot, int[] row, int[] hotbar) {
+        if (row.length != 9 || hotbar.length != 9) throw new IllegalArgumentException("Expected two nine-slot rows");
+        Planner planner = new Planner(snapshot, row, hotbar);
+        for (int column = 0; column < 9; column++) {
+            int source = row[column], destination = hotbar[column];
+            Stack a = planner.at(source), b = planner.at(destination);
+            if (a.count > planner.state.limit(destination, a) || b.count > planner.state.limit(source, b))
+                throw new IllegalArgumentException("Stack does not fit in swapped slot");
+            if (a.equals(b)) continue;
+            List<Stack> next = new ArrayList<>(planner.state.slots);
+            next.set(source, b); next.set(destination, a);
+            Snapshot after = new Snapshot(next, Stack.EMPTY, planner.state.limits());
+            planner.clicks.add(new Plan.Click(source, column, planner.state, after));
+            planner.state = after;
+        }
+        return planner.finish();
+    }
+
     public static Comparator<Stack> order(boolean caseSensitive) {
         return (left, right) -> {
             if (left.empty() || right.empty()) return Boolean.compare(left.empty(), right.empty());

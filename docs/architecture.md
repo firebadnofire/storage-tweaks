@@ -1,6 +1,6 @@
 # Architecture
 
-The implemented target is Forge 1.12.2. Other targets have no adapter yet.
+The project targets Forge 1.12.2 only.
 
 `common` contains immutable stack/snapshot values, transfer and sort planning, and
 the server request replay/freshness gate. It has no Minecraft or loader dependency
@@ -42,8 +42,11 @@ Finder jobs are independent bounded client tasks. Only item search owns containe
 interaction; it excludes inventory automation and manual container activity. It
 retains the actual suppressed GuiContainer and installs its actual container before
 the initial contents packet, because cancelling GuiOpenEvent skips normal initGui.
-On a match it releases search ownership and displays that same screen. No substitute
-container or close/reopen sequence is used.
+Item search records each candidate's count, closes it, and continues scanning.
+After the scan it reopens the highest observed match through ordinary interaction,
+rechecks fresh contents, faces the target, releases ownership, and displays that
+same final screen. There is no substitute container or additional reopen during
+the final reveal.
 
 Development runtime tests use a separate source set and test mod, excluded from
 distribution and source JARs.
@@ -53,3 +56,16 @@ creative catalogue or its wrapper slot numbers. Click dispatch temporarily selec
 that real window-0 container for vanilla prediction, restoring the visible
 container in a finally block. Tab changes stop the job. Only the main 27 slots
 participate; the creative catalogue, trash slot, equipment and hotbar are excluded.
+
+
+Row swaps use native 1.12.2 `ClickType.SWAP` (number-key) clicks rather than
+pickup/merge sequences. Plans carry the hotbar button index and exact before/after
+snapshots; each column exchanges complete stacks without a cursor intermediate.
+The adapter maps logical InventoryPlayer indices to real container slots and
+validates every changed destination, including the hotbar. Numbered controls are
+3/2/1 beside player main rows, continuing upward through chest rows 4-6 or 4-9.
+Only verified 27/54-slot vanilla chest screens gain storage row controls; the
+hotbar has no button. Row coordinates come from actual container slots. Unbound optional keys use the same scheduler;
+with no GUI open it tracks the real player container/window 0 and interrupts on
+screen changes or manual interaction. Creative uses the real player container
+while retaining the displayed creative wrapper. A whole row is paced, not atomic.

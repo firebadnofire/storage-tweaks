@@ -30,6 +30,30 @@ final class InventoryAdapter {
         }
         return ids.stream().mapToInt(Integer::intValue).toArray();
     }
+    static int swapRowCount(GuiContainer screen) {
+        if(screen instanceof GuiInventory || screen instanceof GuiContainerCreative) return 3;
+        if(screen.getClass()!=GuiChest.class || !supported(screen)) return 0;
+        int size=group(container(screen),false,false).length;
+        return size==27 || size==54?3+size/9:0;
+    }
+    static int[] swapRow(Container container,int number) {
+        if(number>=1 && number<=3) return playerRow(container,9+(3-number)*9);
+        int[] storage=group(container,false,false);
+        if((storage.length!=27 && storage.length!=54) || number<4 || number>3+storage.length/9)
+            throw new IllegalArgumentException("That row is unavailable in this inventory");
+        int first=storage.length-(number-3)*9;
+        return Arrays.copyOfRange(storage,first,first+9);
+    }
+    static int[] playerRow(Container container, int first) {
+        int[] result = new int[9]; Arrays.fill(result, -1);
+        for (int i = 0; i < container.inventorySlots.size(); i++) {
+            Slot slot = container.getSlot(i);
+            int column = slot.getSlotIndex() - first;
+            if (slot.inventory == Minecraft.getMinecraft().player.inventory && column >= 0 && column < 9) result[column] = i;
+        }
+        for (int slot : result) if (slot < 0) throw new IllegalArgumentException("Player row is unavailable");
+        return result;
+    }
     static org.firebadnofire.storagetweaks.inventory.Stack value(ItemStack stack) {
         if (stack.isEmpty()) return org.firebadnofire.storagetweaks.inventory.Stack.EMPTY;
         NBTTagCompound tag = stack.serializeNBT(); tag.removeTag("Count");
@@ -54,13 +78,16 @@ final class InventoryAdapter {
                 throw new IllegalArgumentException("Item capabilities prevent safe stack comparison");
         }
         for (Plan.Click click : plan.clicks) {
-            Slot slot = container.getSlot(click.slot);
+            for (int id = 0; id < container.inventorySlots.size(); id++) {
+            if (id != click.slot && click.before.slots.get(id).equals(click.after.slots.get(id))) continue;
+            Slot slot = container.getSlot(id);
             if (!slot.canTakeStack(Minecraft.getMinecraft().player)) throw new IllegalArgumentException("Restricted slot");
-            org.firebadnofire.storagetweaks.inventory.Stack placed = click.after.slots.get(click.slot);
+            org.firebadnofire.storagetweaks.inventory.Stack placed = click.after.slots.get(id);
             if (!placed.empty()) {
                 ItemStack prototype = prototypes.get(placed.key).copy(); prototype.setCount(placed.count);
                 if (!slot.isItemValid(prototype) || placed.count > slot.getItemStackLimit(prototype))
                     throw new IllegalArgumentException("Item is not permitted in destination slot");
+            }
             }
         }
     }

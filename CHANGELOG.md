@@ -1,6 +1,32 @@
 # Changelog
 
-## 0.1.0-dev (unreleased)
+## 0.0.1 (unreleased)
+
+- Extend numbered hotbar swaps to small and double chests, with unbound row 1-9 bindings and bottom-up numbering.
+- Allow protected punch items with a rebindable held override (Left Shift by default); show the required key below the deposit label.
+
+* Accept punch deposits immediately after hotbar changes without waiting for the
+  hover probe. Synchronize the held slot before sending; prevent attack fall-through
+  and held-input chest destruction, including creative mode. Replace fixed click
+  delays with a bounded burst budget so tick stalls do not discard normal clicks.
+
+* Add 3/2/1 row-to-hotbar swap buttons in survival and the creative player inventory,
+  with unbound optional keys and an independent toggle. Preserve exact stack counts
+  and column order using acknowledged vanilla hotbar exchanges.
+
+* Fix held-slot probe ordering: switching hotbar slots while aiming at storage
+  no longer leaves punch availability waiting until the player looks away.
+
+* Restore vanilla-storage punch alongside the reviewed Traveler's Backpack 1.0.35
+  distribution; verify its exact JAR before accepting that compatibility rule.
+* Explain the exact blocking mod when enabling punch remains denied by policy.
+
+* Keep the camera stationary during item-search checks; face only the final match.
+* Make Look at chat links distinct, underlined actions beside coordinates.
+
+* Set title to Fire's Storage Tweaks and creator to FireBADnoFire.
+* Scan every reachable storage candidate for cfinditem, report matching counts with
+  [Look at], then face and open the container with the highest observed count.
 
 * Add persisted server /punchdeposit true/false, a Forge permission node, and a
   singleplayer-owner permission exception.
@@ -29,4 +55,4 @@
 * Implemented optional server punch negotiation, freshness/replay validation, tool
   protection, and a conservative access-policy boundary.
 * Added a development-only integrated gameplay harness; see testing documentation
-  for actual results and remaining validation. This is not a full-range release.
+  for actual results and remaining validation. Target: Forge 1.12.2 only.
