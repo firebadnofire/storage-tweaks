@@ -4,6 +4,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v* or V* tag to recover; it must resolve to this workflow commit'
+        type: string
+        required: true
 
 jobs:
   build:
@@ -82,7 +87,7 @@ jobs:
 
   release:
     needs: [build, minecraft-smoke]
-    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/V'))
+    if: (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/V'))) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     container:
       image: node:24-bookworm@sha256:9d266751ca3d7fdbe651c878ffd5ad0a42fed49a18c283509267c97f025b7496
@@ -114,4 +119,5 @@ jobs:
       - name: Publish a verified Forgejo release
         env:
           RELEASE_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: bash scripts/ci/publish.sh

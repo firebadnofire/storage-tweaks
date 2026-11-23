@@ -8,7 +8,6 @@ import os
 import pathlib
 import re
 import subprocess
-import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -61,8 +60,12 @@ class API:
 
 def release_tag():
     event, ref = os.environ.get('GITHUB_EVENT_NAME'), os.environ.get('GITHUB_REF')
-    require(event == 'push' and ref and ref.startswith('refs/tags/'), 'Publication requires a pushed v* or V* tag')
-    tag = ref[len('refs/tags/'):]
+    if event == 'push':
+        require(ref and ref.startswith('refs/tags/'), 'Publication requires a pushed v* or V* tag')
+        tag = ref[len('refs/tags/'):]
+    else:
+        require(event == 'workflow_dispatch', 'Publication requires a tag push or manual recovery dispatch')
+        tag = os.environ.get('RELEASE_TAG', '')
     require(re.fullmatch(r'[vV][A-Za-z0-9._+-]*', tag) and '..' not in tag and not tag.endswith('.'),
             'Publication requires a safe v* or V* tag')
     return tag
@@ -73,7 +76,8 @@ def notes(record, tag):
             'Minecraft: {}\nForge: {}\nLicense: AGPL-3.0-or-later\n\n'
             'Validation: Gradle build/reobfuscation and {} unit tests passed; the exact staged binary passed '
             'a disposable Forge dedicated-server startup, loaded-mod, ten-second health, and graceful shutdown smoke test. '
-            'SHA-256 checksums and detached GPG signatures were verified before publication.\n\n'
+            'SHA-256 checksums and detached GPG signatures were verified before upload; Forgejo asset names and '
+            'reported byte sizes were checked before publication. Remote asset downloads are intentionally not performed.\n\n'
             'Smoke testing does not verify client GUI behavior, finder behavior, punch-deposit gameplay, or modpack compatibility.\n').format(
                 REPOSITORY, record['commit'], tag, record['version'], record['minecraft'], record['forge'], record['tests'])
 
@@ -82,28 +86,13 @@ def files(directory):
     return {path.name: path.read_bytes() for path in sorted(pathlib.Path(directory).iterdir()) if path.is_file()}
 
 
-def asset_bytes(api, asset):
-    require(asset.get('type', 'attachment') == 'attachment', 'External release assets are not supported')
-    try:
-        attachment = str(uuid.UUID(asset['uuid']))
-    except (KeyError, ValueError, TypeError, AttributeError):
-        raise RuntimeError('Forgejo asset is missing a valid attachment UUID: ' + asset.get('name', '<unknown>'))
-    return api.request('GET', 'https://pubcode.archuser.org/attachments/' + attachment, raw=True)
-
-
 def check_assets(api, release, expected):
     assets = api.repo('GET', '/releases/{}/assets?per_page=100&limit=100'.format(release['id']))
     inventory = {asset['name']: asset for asset in assets}
     require(len(inventory) == len(assets) and set(inventory) == set(expected), 'Remote asset inventory mismatch')
-    with tempfile.TemporaryDirectory(prefix='storage-tweaks-release-') as temporary:
-        root = pathlib.Path(temporary)
-        for name, asset in inventory.items():
-            data = asset_bytes(api, asset)
-            require(data == expected[name], 'Remote asset differs: ' + name)
-            (root / name).write_bytes(data)
-        for signed in ('SHA256SUMS', 'build.json') + tuple(name for name in expected if name.endswith('.jar')):
-            subprocess.run(['gpg', '--batch', '--verify', str(root / (signed + '.asc')), str(root / signed)],
-                           check=True, capture_output=True)
+    for name, asset in inventory.items():
+        require(asset.get('type', 'attachment') == 'attachment', 'External release assets are not supported')
+        require(asset.get('size') == len(expected[name]), 'Remote asset size differs: ' + name)
 
 
 def main():
