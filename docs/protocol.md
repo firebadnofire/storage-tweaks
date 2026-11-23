@@ -34,7 +34,8 @@ with a separate replay/throttle gate. The client polls at most once per six tick
 while aiming at an eligible target, with one outstanding probe and a finite response
 timeout. A positive result authorizes the label for
 at most ten client ticks and the same target/held stack. The actual deposit always
-validates again. Changing targets, held contents, or connection invalidates it.
+validates again. Changing targets, held contents, or connection invalidates it. Held-stack changes
+clear the old pending probe and immediately schedule a new availability check.
 
 ## Protection boundary
 
@@ -51,3 +52,15 @@ blocks. Shulker punch deposit is not implemented. Unknown custom inventories are
 denied. Tools, weapons, hoes, shears, damageable items, Forge tool classifications,
 and configured registry exclusions are protected. There is no vanilla-server
 open/shift-click/close fallback.
+
+## Server administrator toggle
+
+`/punchdeposit <true|false>` writes server.enabled to the Forge configuration and
+refreshes confirmed client capabilities immediately. Every server deposit still
+checks the live setting. The permission node is
+`firebadnofire_storage_tweaks.command.punchdeposit`, default OP through Forge
+PermissionAPI. The integrated server's owner is allowed without OP; remote LAN
+players use normal permission checks. Console uses command level 2. A compatible
+LuckPerms/permission bridge may supply the Forge permission decision, but no real
+LuckPerms distribution has been tested. Enabling the global setting does not bypass
+container protections or authorize otherwise unreviewed mods.

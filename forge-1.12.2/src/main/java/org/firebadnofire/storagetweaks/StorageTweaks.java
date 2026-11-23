@@ -8,7 +8,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import org.apache.logging.log4j.Logger;
 
 /** Client features use vanilla packets; installing this mod on either side is optional. */
-@Mod(modid = StorageTweaks.ID, name = "FireBADnoFire's Storage Tweaks", version = "0.1.0-dev",
+@Mod(modid = StorageTweaks.ID, name = "Fire's Storage Tweaks", version = "0.0.1",
         acceptedMinecraftVersions = "[1.12.2]", acceptableRemoteVersions = "*",
         guiFactory = "org.firebadnofire.storagetweaks.client.ConfigFactory")
 public final class StorageTweaks {
@@ -24,5 +24,10 @@ public final class StorageTweaks {
         org.firebadnofire.storagetweaks.server.PunchNetwork.init();
         proxy.preInit();
     }
-    @Mod.EventHandler public void init(FMLInitializationEvent event) { proxy.init(); }
+    @Mod.EventHandler public void init(FMLInitializationEvent event) {
+        org.firebadnofire.storagetweaks.server.PunchDepositCommand.registerPermission();proxy.init();
+    }
+    @Mod.EventHandler public void serverStarting(net.minecraftforge.fml.common.event.FMLServerStartingEvent event) {
+        event.registerServerCommand(new org.firebadnofire.storagetweaks.server.PunchDepositCommand());
+    }
 }

@@ -289,3 +289,40 @@ five-mod Forge client and the missing Storage Tweaks client mod, followed by a
 successful login. It stayed connected for 200 client ticks. This validates that
 the server does not require clients to install Storage Tweaks; it does not claim
 a completely unmodified graphical vanilla-client test or punch availability.
+
+## Creative inventory and command-chat fixes, 2026-11-22
+
+`validation-user-fixes-final-build.log` records Validate.ps1 exiting successfully.
+The focused production client run used
+`:forge-1.12.2:productionClient -PruntimeMode=creative-regression
+-PruntimeInstance=regression-creative-focused-v2` with Java 8 and master volume 0.
+`validation-creative-focused-v2.log` records server-accepted creative main-27
+sorting with the diamond hotbar unchanged, command entry through GuiChat accepted,
+and cancellation releasing item-search suppression. These are automated event-path
+checks, not physical clicks or remote multiplayer validation of the new creative
+path. The ordinary inventory mouse path was validated separately above.
+
+Earlier new-fixture attempts are retained: stage 51 read a future already consumed
+by the shared harness, then the first focused run hid the screen without normally
+closing its container. Both fixture errors were corrected before the final pass.
+The rejected-transaction messages in these disposable worlds are deliberate
+injected protocol tests; an ordinary gameplay rejection must still be investigated.
+Held-stack changes now invalidate pending punch probes and request new authorization
+without waiting for the previous response. This refresh change builds; rapid
+physical hotbar switching under network latency has not been separately verified.
+
+## Creative button placement and commands, 2026-11-22
+
+Validate.ps1 passed in validation-punch-command-build.log. The focused production
+run in validation-commands-confirm-runtime.log passed all assertions: creative Sort
+is right of the panel, initially hidden on the catalogue tab and visible on the
+player tab, server accepts the sort with hotbar preserved; item search accepts chat
+and cancels cleanly; clook aims at a block center without movement; the integrated
+server owner can toggle punchdeposit false then true and the config property is
+persisted. This uses automated GUI/button events, not physical remote input.
+The fixture invokes server commands through ICommand so ForgeGradle remaps the
+interface methods correctly. Earlier attempts retain their native JNA crash,
+concurrent-build mapping failure, and fixture method-mapping failure logs.
+The aiming assertion normalizes Minecraft's lookup-table look vector before
+comparing direction, rather than incorrectly requiring a perfect unit magnitude.
+Live LuckPerms and dedicated-server permission delegation remain unverified.

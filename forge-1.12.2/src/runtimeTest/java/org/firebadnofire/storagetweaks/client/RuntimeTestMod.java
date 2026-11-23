@@ -87,6 +87,7 @@ public final class RuntimeTestMod {
                 for(int slot:ids) if(mc.player.openContainer.getSlot(slot).getSlotIndex()<9)
                     require(snapshot.slots.get(slot).equals(hotbar.get(mc.player.openContainer.getSlot(slot).getSlotIndex())),"Intermediate hotbar write");
             }
+            if(mode.equals("creative-regression") && stage==0) stage=50;
             switch(stage) {
                 case 0:
                     pending=server(() -> {
@@ -362,7 +363,72 @@ public final class RuntimeTestMod {
                     require(!ClientProxy.finder.interacting(),"Dimension change leaked finder suppression");
                     pass("Actual dimension transfer renews punch session and releases finder suppression");stage++;break;
                 case 42:
+                    if(!mode.equals("pack")) { stage=50;break; }
                     pass(mode.equals("pack")?"ALL PACK RUNTIME TESTS PASSED":"ALL INTEGRATED RUNTIME TESTS PASSED");stage++;mc.shutdown();break;
+                case 50:
+                    mc.displayGuiScreen(null);
+                    pending=server(() -> {
+                        player().setGameType(GameType.CREATIVE);player().inventory.clear();
+                        player().inventory.setInventorySlotContents(9,new ItemStack(Blocks.STONE,12));
+                        player().inventory.setInventorySlotContents(10,new ItemStack(Items.APPLE,7));
+                        player().inventory.setInventorySlotContents(0,new ItemStack(Items.DIAMOND,3));
+                        player().inventoryContainer.detectAndSendChanges();
+                    });stage=51;next=ticks+30;break;
+                case 51:
+                    net.minecraft.client.gui.inventory.GuiContainerCreative creative=new net.minecraft.client.gui.inventory.GuiContainerCreative(mc.player);
+                    mc.displayGuiScreen(creative);
+                    for(net.minecraft.client.gui.GuiButton button:buttons) if(button.displayString.equals("Sort")) {
+                        require(button.x>=creative.getGuiLeft()+creative.getXSize(),"Creative Sort is not on the right");
+                        if(!InventoryAdapter.creative(creative)) require(!button.visible,"Creative Sort visible in catalogue");
+                    }
+                    java.lang.reflect.Method select=null;
+                    for(java.lang.reflect.Method method:creative.getClass().getDeclaredMethods())
+                        if(java.lang.reflect.Modifier.isPrivate(method.getModifiers()) && method.getReturnType()==Void.TYPE &&
+                                java.util.Arrays.equals(method.getParameterTypes(),new Class<?>[]{net.minecraft.creativetab.CreativeTabs.class})) {
+                            require(select==null,"Ambiguous creative tab fixture method");select=method;
+                        }
+                    require(select!=null,"Creative tab fixture method missing");select.setAccessible(true);
+                    select.invoke(creative,net.minecraft.creativetab.CreativeTabs.INVENTORY);
+                    start(2);stage=52;next=ticks+40;break;
+                case 52:
+                    require(!ClientProxy.JOB.active(),"Creative sort did not finish");
+                    for(net.minecraft.client.gui.GuiButton button:buttons) if(button.displayString.equals("Sort"))
+                        require(button.visible,"Creative Sort hidden in player inventory");
+                    pending=server(() -> {
+                        require(player().inventory.getStackInSlot(9).getItem()==Items.APPLE,"Creative sort server order wrong");
+                        require(player().inventory.getStackInSlot(10).getCount()==12,"Creative sort lost stone");
+                        require(player().inventory.getStackInSlot(0).getItem()==Items.DIAMOND && player().inventory.getStackInSlot(0).getCount()==3,"Creative sort changed hotbar");
+                    });stage=53;break;
+                case 53:
+                    pass("Creative main-inventory sort accepted by integrated server; hotbar preserved");
+                    mc.player.closeScreen();
+                    mc.displayGuiScreen(new net.minecraft.client.gui.GuiChat());
+                    ClientCommandHandler.instance.executeCommand(mc.player,"/cfinditem minecraft:apple");
+                    require(ClientProxy.finder.interacting(),"Chat rejected item search");
+                    ClientProxy.finder.cancel("Fixture complete");mc.displayGuiScreen(null);
+                    pass("Item search accepts command chat and releases cancellation suppression");
+                    net.minecraft.util.math.Vec3d beforeLook=mc.player.getPositionVector();
+                    net.minecraft.util.math.BlockPos lookTarget=mc.player.getPosition().add(10,2,-7);
+                    ClientCommandHandler.instance.executeCommand(mc.player,"/clook "+lookTarget.getX()+" "+lookTarget.getY()+" "+lookTarget.getZ());
+                    net.minecraft.util.math.Vec3d expectedLook=new net.minecraft.util.math.Vec3d(lookTarget).add(.5,.5,.5).subtract(mc.player.getPositionEyes(1)).normalize();
+                    StorageTweaks.LOG.info("LOOK_FIXTURE target={} yaw={} pitch={} head={} actual={} expected={} command={}",lookTarget,mc.player.rotationYaw,mc.player.rotationPitch,mc.player.rotationYawHead,mc.player.getLookVec(),expectedLook,ClientCommandHandler.instance.getCommands().get("clook"));
+                    require(mc.player.getLookVec().normalize().dotProduct(expectedLook)>.999999,"clook did not aim at block center");
+                    require(mc.player.getPositionVector().equals(beforeLook),"clook moved player");
+                    pass("clook aims at block center without moving player");
+                    pending=server(() -> {
+                        net.minecraft.command.ICommand command=new org.firebadnofire.storagetweaks.server.PunchDepositCommand();
+                        require(command.checkPermission(mc.getIntegratedServer(),player()),"Singleplayer owner requires OP");
+                        try {
+                            command.execute(mc.getIntegratedServer(),player(),new String[]{"false"});
+                            require(!Settings.serverPunch,"Server command did not disable punch");
+                            require(!Settings.config.get("server","enabled",true).getBoolean(),"Server toggle was not persisted");
+                            command.execute(mc.getIntegratedServer(),player(),new String[]{"true"});
+                            require(Settings.serverPunch,"Server command did not enable punch");
+                        } catch(net.minecraft.command.CommandException failure) { throw new AssertionError(failure); }
+                    });stage=54;break;
+                case 54:
+                    pass("Singleplayer punchdeposit toggle and persisted setting");
+                    pass("ALL INTEGRATED RUNTIME TESTS PASSED");stage=55;mc.shutdown();break;
                 case 43:
                     if(punchRestrictions()) stage=44;
                     break;
@@ -559,10 +625,10 @@ public final class RuntimeTestMod {
     @SubscribeEvent(priority=net.minecraftforge.fml.common.eventhandler.EventPriority.HIGHEST)
     public void ignoreWorldClicks(net.minecraftforge.client.event.MouseEvent event) { event.setCanceled(true); }
     private void start(int operation) {
-        GuiContainer gui=(GuiContainer)mc.currentScreen;Snapshot snapshot=InventoryAdapter.snapshot(gui.inventorySlots);
-        int[] storage=InventoryAdapter.group(gui.inventorySlots,false,false),player=InventoryAdapter.group(gui.inventorySlots,true,true);
+        GuiContainer gui=(GuiContainer)mc.currentScreen;Snapshot snapshot=InventoryAdapter.snapshot(InventoryAdapter.container(gui));
+        int[] storage=InventoryAdapter.group(InventoryAdapter.container(gui),false,false),player=InventoryAdapter.group(InventoryAdapter.container(gui),true,true);
         Plan plan=operation==0?Planner.transfer(snapshot,storage,player):operation==1?Planner.transfer(snapshot,player,storage):
-                Planner.sort(snapshot,gui instanceof net.minecraft.client.gui.inventory.GuiInventory?InventoryAdapter.group(gui.inventorySlots,true,false):storage,false);
+                Planner.sort(snapshot,(gui instanceof net.minecraft.client.gui.inventory.GuiInventory || InventoryAdapter.creative(gui))?InventoryAdapter.group(InventoryAdapter.container(gui),true,false):storage,false);
         expected=plan.result;
         require(buttonScreen==gui,"No button initialization observed for current screen");
         String label=operation==0?"Take":operation==1?"Store":"Sort";

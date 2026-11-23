@@ -123,6 +123,9 @@ final class Finder {
         ITextComponent message=new TextComponentString("[Storage Tweaks] "+text+" ["+coords+"] "+
                 String.format(Locale.ROOT,"%.2f",distance)+"m");
         message.getStyle().setClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND,"/tp "+coords));
+        ITextComponent look=new TextComponentString(" [Look at]");
+        look.getStyle().setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,"/clook "+coords));
+        message.appendSibling(look);
         mc.player.sendMessage(message);
     }
     private static ResourceLocation id(String text) throws CommandException {
@@ -296,7 +299,9 @@ final class Finder {
         final Predicate<ItemStack> predicate; final boolean keep;
         final Set<String> visited=new HashSet<>();
         GuiContainer screen;
-        Target target;
+        Target target,best;
+        int bestCount,shown;
+        boolean selecting;
         boolean waiting,ready,enderVisited;
         int sent, next, inspected, denied;
         List<Target> candidates;
@@ -313,11 +318,17 @@ final class Finder {
                     int count=0; int[] budget={4096};
                     for(int slot:InventoryAdapter.group(screen.inventorySlots,false,false)) count+=count(screen.inventorySlots.getSlot(slot).getStack(),0,budget);
                     inspected++;
-                    if(count>0) {
-                        report("Found "+(incomplete?"at least ":"")+count+" matching item(s)",target.entity==null?target.pos:target.entity.getPosition());
+                    if(selecting) {
+                        if(count<=0) { release(true);ClientProxy.say("Selected container changed; matching items are no longer present. Search again.");return true; }
+                        LookCommand.lookAt(target.point());
                         GuiContainer match=screen;
-                        // Release ownership BEFORE displaying; use the same screen/container/window, never reopen.
-                        release(false); itemSearch=null; mc.displayGuiScreen(match); return true;
+                        release(false);itemSearch=null;mc.displayGuiScreen(match);
+                        ClientProxy.say("Search "+(incomplete?"incomplete":"complete")+": checked "+(inspected-1)+" inventories; opening best observed match ("+count+" items now)." );
+                        return true;
+                    }
+                    if(count>0) {
+                        if(shown++<Settings.results) report("Found "+(incomplete?"at least ":"")+count+" matching item(s)",target.entity==null?target.pos:target.entity.getPosition());
+                        if(best==null || count>bestCount) { best=target;bestCount=count; }
                     }
                     closeOwned(); waiting=ready=false;screen=null;target=null;next=ClientProxy.ticks+Settings.interactionPace;
                 } else if(ClientProxy.ticks-sent>=Settings.timeout) {
@@ -340,14 +351,25 @@ final class Finder {
                         if(mc.world.isBlockLoaded(adjacent) && mc.world.getBlockState(adjacent).getBlock()==mc.world.getBlockState(candidate.pos).getBlock()) visited.add(adjacent.toLong()+"");
                     }
                 }
-                target=candidate; waiting=true; ready=false; sent=ClientProxy.ticks;
-                if(candidate.entity!=null) mc.playerController.interactWithEntity(mc.player,candidate.entity,EnumHand.MAIN_HAND);
-                else mc.playerController.processRightClickBlock(mc.player,mc.world,candidate.pos,EnumFacing.UP,candidate.point(),EnumHand.MAIN_HAND);
+                openTarget(candidate);
                 return false;
+            }
+            if(best!=null) {
+                if(shown>Settings.results) ClientProxy.say((shown-Settings.results)+" additional matching inventories omitted from chat (result limit).");
+                if(best.point().distanceTo(mc.player.getPositionEyes(1))>mc.playerController.getBlockReachDistance() || best.entity==null && !mc.world.isBlockLoaded(best.pos)) {
+                    release(false);ClientProxy.say("Best matching container is no longer reachable; search again.");return true;
+                }
+                selecting=true;openTarget(best);return false;
             }
             if(keep) { candidates=null;collected=false;tileIndex=entityIndex=0;visited.clear();enderVisited=false;next=ClientProxy.ticks+20; return false; }
             ClientProxy.say((incomplete?"Incomplete item search; no match found in ":"No matching items in ")+inspected+" reachable inventories; "+denied+" denied/timed out. Unopened or remote contents remain unknown.");
             release(false);return true;
+        }
+        void openTarget(Target candidate) {
+            target=candidate;waiting=true;ready=false;sent=ClientProxy.ticks;
+            LookCommand.lookAt(candidate.point());
+            if(candidate.entity!=null) mc.playerController.interactWithEntity(mc.player,candidate.entity,EnumHand.MAIN_HAND);
+            else mc.playerController.processRightClickBlock(mc.player,mc.world,candidate.pos,EnumFacing.UP,candidate.point(),EnumHand.MAIN_HAND);
         }
         boolean collect() {
             if(collected) return true;

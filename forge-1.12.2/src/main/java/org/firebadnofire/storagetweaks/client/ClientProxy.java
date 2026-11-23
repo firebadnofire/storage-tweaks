@@ -58,6 +58,7 @@ public final class ClientProxy extends CommonProxy {
         cancel=new KeyBinding("key.storage_tweaks.cancel",Keyboard.KEY_NONE,"key.categories.storage_tweaks");
         ClientRegistry.registerKeyBinding(settings); ClientRegistry.registerKeyBinding(cancel);
         if(conflict) StorageTweaks.LOG.info("P is already bound; bind Storage Tweaks settings in Controls or use Mods > Config");
+        LookCommand.register();
         if(!Loader.isModLoaded("clientcommands")) { finder=new Finder(); finder.register(); }
         else StorageTweaks.LOG.info("clientcommands detected: all Storage Tweaks finders and finder services are disabled");
     }
@@ -75,7 +76,10 @@ public final class ClientProxy extends CommonProxy {
         if(ticks-lastCapability>250) { punchAvailable=false; capabilityStatus="unavailable or timed out"; }
         boolean candidate=candidate();
         if(!candidate || !Objects.equals(probeTarget,mc.objectMouseOver.getBlockPos()) ||
-                !ItemStack.areItemStacksEqual(probeStack,mc.player.getHeldItemMainhand())) probePending=false;
+                !ItemStack.areItemStacksEqual(probeStack,mc.player.getHeldItemMainhand())) {
+            if(probePending || !probeStack.isEmpty()) { authorizedTarget=null;probeTick=ticks-6; }
+            probePending=false;probeStack=ItemStack.EMPTY;
+        }
         if(candidate && ticks-probeTick>=6 && (!probePending || ticks-probeTick>=Settings.timeout)) {
             probeTick=ticks;
             PunchNetwork.Message probe=new PunchNetwork.Message();probe.type=5;probe.session=session;probe.token=token;
@@ -134,23 +138,41 @@ public final class ClientProxy extends CommonProxy {
         controlsScreen=null;controls=Collections.emptyList();consumedPressScreen=null;
         if(!(event.getGui() instanceof GuiContainer) || !Settings.enabled) return;
         GuiContainer screen=(GuiContainer)event.getGui();
-        if(!InventoryAdapter.supported(screen)) return;
-        boolean player=screen instanceof GuiInventory;
+        if(!InventoryAdapter.supported(screen) && !(screen instanceof GuiContainerCreative)) return;
+        boolean player=screen instanceof GuiInventory || screen instanceof GuiContainerCreative;
         if(player?!Settings.inventorySort:!Settings.chestButtons) return;
         int x=screen.getGuiLeft(), y=screen.getGuiTop()-21;
+        if(screen instanceof GuiContainerCreative) {
+            OperationButton button=new OperationButton(screen,screen.getGuiLeft()+screen.getXSize()+2,Math.max(0,screen.getGuiTop()),"Sort",2);
+            button.visible=InventoryAdapter.creative(screen);
+            event.getButtonList().add(button);
+            controlsScreen=screen;controls=event.getButtonList();return;
+        }
         boolean side=y<0;
         if(side) { x-=50;y=Math.max(0,screen.getGuiTop());if(x<0) return; }
-        if(player) event.getButtonList().add(new OperationButton(side?x:x+120,y,"Sort",2));
+        if(player) event.getButtonList().add(new OperationButton(screen,side?x:x+120,y,"Sort",2));
         else {
-            event.getButtonList().add(new OperationButton(side?x:x+10,y,"Take",0));
-            event.getButtonList().add(new OperationButton(side?x:x+64,side?y+22:y,"Store",1));
-            event.getButtonList().add(new OperationButton(side?x:x+118,side?y+44:y,"Sort",2));
+            event.getButtonList().add(new OperationButton(screen,side?x:x+10,y,"Take",0));
+            event.getButtonList().add(new OperationButton(screen,side?x:x+64,side?y+22:y,"Store",1));
+            event.getButtonList().add(new OperationButton(screen,side?x:x+118,side?y+44:y,"Sort",2));
         }
         controlsScreen=screen;controls=event.getButtonList();
     }
     private static final class OperationButton extends GuiButton {
         final int operation;
-        OperationButton(int x,int y,String label,int operation) { super(0,x,y,48,20,label); this.operation=operation; }
+        final GuiContainer owner;
+        OperationButton(GuiContainer owner,int x,int y,String label,int operation) {
+            super(0,x,y,48,20,label);this.owner=owner;this.operation=operation;
+        }
+        private void updateVisibility() {
+            if(owner instanceof GuiContainerCreative) visible=Settings.enabled && Settings.inventorySort && InventoryAdapter.creative(owner);
+        }
+        @Override public void drawButton(Minecraft mc,int mouseX,int mouseY,float partialTicks) {
+            updateVisibility();super.drawButton(mc,mouseX,mouseY,partialTicks);
+        }
+        @Override public boolean mousePressed(Minecraft mc,int mouseX,int mouseY) {
+            updateVisibility();return super.mousePressed(mc,mouseX,mouseY);
+        }
     }
     @SubscribeEvent public void action(GuiScreenEvent.ActionPerformedEvent.Pre event) {
         if(!(event.getButton() instanceof OperationButton)) return;
@@ -161,15 +183,15 @@ public final class ClientProxy extends CommonProxy {
         if(!InventoryAdapter.supported(screen) || Minecraft.getMinecraft().player.isSpectator()) return;
         try {
             int operation=((OperationButton)event.getButton()).operation;
-            Snapshot snapshot=InventoryAdapter.snapshot(screen.inventorySlots);
-            int[] storage=InventoryAdapter.group(screen.inventorySlots,false,false);
-            int[] player=InventoryAdapter.group(screen.inventorySlots,true,true);
+            Snapshot snapshot=InventoryAdapter.snapshot(InventoryAdapter.container(screen));
+            int[] storage=InventoryAdapter.group(InventoryAdapter.container(screen),false,false);
+            int[] player=InventoryAdapter.group(InventoryAdapter.container(screen),true,true);
             Plan plan;
             if(operation==0) plan=Planner.transfer(snapshot,storage,player);
             else if(operation==1) {
                 int[] eligible=Arrays.stream(player).filter(slot -> !Arrays.asList(Settings.storeExclusions).contains(snapshot.slots.get(slot).registryId)).toArray();
                 plan=Planner.transfer(snapshot,eligible,storage);
-            } else plan=Planner.sort(snapshot,screen instanceof GuiInventory?InventoryAdapter.group(screen.inventorySlots,true,false):storage,Settings.caseSensitive);
+            } else plan=Planner.sort(snapshot,(screen instanceof GuiInventory || InventoryAdapter.creative(screen))?InventoryAdapter.group(InventoryAdapter.container(screen),true,false):storage,Settings.caseSensitive);
             JOB.start(screen,plan,ticks);
         } catch(IllegalArgumentException | IllegalStateException failure) { say(failure.getMessage()); StorageTweaks.LOG.debug("Inventory plan rejected",failure); }
     }

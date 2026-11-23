@@ -1,9 +1,9 @@
 [
   {
     "modid": "firebadnofire_storage_tweaks",
-    "name": "FireBADnoFire's Storage Tweaks",
+    "name": "Fire's Storage Tweaks",
     "description": "Client inventory controls and finder commands; optional server-authoritative punch deposit.",
-    "version": "0.1.0-dev",
+    "version": "0.0.1",
     "mcversion": "1.12.2",
     "authorList": ["FireBADnoFire"]
   }

@@ -1,4 +1,4 @@
-# FireBADnoFire's Storage Tweaks
+# Fire's Storage Tweaks
 
 An independently implemented inventory and finder mod. The current implementation
 targets **Minecraft 1.12.2 / Forge 14.23.5.2864**. It is a development build with
@@ -9,13 +9,13 @@ See [compatibility](docs/compatibility.md) and [testing](docs/testing.md).
 
 - Take, Store, and Sort above supported vanilla chest and shulker screens. Take
   and Store include the hotbar; Store does not exclude tools by default.
-- Sort in the normal survival inventory consolidates and orders the main 27 slots
+- Sort in the survival inventory and creative player-inventory tab consolidates and orders the main 27 slots
   by displayed name. Hotbar, armor, offhand, and crafting slots stay untouched.
 - Legal, paced inventory clicks with confirmation, state checks, and a timeout.
   An interrupted operation preserves cursor contents; put them away normally.
 - Client-side `/cfind`, `/cfindblock`, and `/cfinditem`. Item search interacts with
   reachable storage normally, hides intermediate screens, and shows the original
-  matching container screen. [Exact syntax and limitations](docs/finder.md).
+  best matching container screen. [Exact syntax and limitations](docs/finder.md).
 - Negotiated server-authoritative punch deposit into vanilla chests and ender
   chests, without opening their GUI. Tools and damageable equipment are protected.
 
@@ -38,6 +38,38 @@ is persisted by Forge.
 When loader mod ID `clientcommands` is present, all three finder commands and their
 services are skipped. Other command-name collisions are skipped with a log message.
 The upstream mod is a read-only behavioral reference, not a runtime dependency.
+
+## Commands
+
+| Command | Operation |
+| --- | --- |
+| `/punchdeposit <true\|false>` | Server-wide persisted punch toggle. Console/admins on dedicated servers; singleplayer owner needs no OP. |
+| `/clook <x> <y> <z>` | Aim at the center of a block, without moving or interacting. Supports `~` relative coordinates. Finder results include a clickable Look action. |
+| `/cfind <selector-or-name-or-UUID> [--keep-searching]` | Find entities known to the client. |
+| `/cfindblock <block> [metadata-or-state-properties] [--keep-searching]` | Find blocks in loaded chunks. Inline `<block>[property=value,...]` is also supported. |
+| `/cfinditem <item> [metadata] [--keep-searching]` | Inspect reachable storage through normal interactions; scan all reachable containers and open the one with the most matches. |
+| `/cfind cancel` | Cancel the entity search. |
+| `/cfindblock cancel` | Cancel the block search. |
+| `/cfinditem cancel` | Cancel the item search and release screen suppression. |
+
+The server command uses Forge's permission node
+`firebadnofire_storage_tweaks.command.punchdeposit`, defaulting to operators.
+Permission providers that implement [Forge PermissionAPI](https://docs.minecraftforge.net/en/1.12.x/utilities/permissionapi/) can grant or deny it,
+including compatible LuckPerms bridges; no particular LuckPerms distribution has
+been tested. The singleplayer owner bypasses OP checks; other LAN players do not.
+Changing the toggle refreshes negotiated clients immediately. Enabling it preserves
+all access checks and the conservative restriction on unreviewed protection mods.
+
+Use registry IDs, for example `/cfinditem minecraft:apple`,
+`/cfindblock minecraft:wool 2`, or `/cfind @e[type=pig,r=32]`.
+Entity selectors are `@e`, `@a`, `@p`, `@r`, and `@s`; supported filters are
+`type`, `name`, `tag`, `r`, `rm`, `c`, `x`, `y`, `z`, `dx`, `dy`, and `dz`.
+Type, name, and tag accept `!` negation. Metadata is the legacy numeric variant.
+`--keep-searching` repeats searches until cancelled; item search still stops and
+shows the best match after a full scan. Results provide coordinate suggestions and clickable
+cancellation. Item search requires an empty cursor and no open inventory or active
+inventory job; entering its command through chat is allowed. No OP permission or
+server mod is required. See [finder details and limits](docs/finder.md).
 
 ## Important limits
 
@@ -73,3 +105,5 @@ AGPL-3.0-or-later, preserving the existing project license. Reference provenance
 and actual upstream licenses are recorded in [licensing](docs/licensing.md) and
 [NOTICE](NOTICE). No releases are published automatically.
 
+
+Version: **0.0.1**. Creator: **FireBADnoFire**.

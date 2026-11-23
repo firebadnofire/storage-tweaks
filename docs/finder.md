@@ -37,6 +37,7 @@ Use Escape during a hidden item search, a cancel command, or the configurable
 cancel binding to stop. Other mouse interactions cancel the search. Screen
 suppression is scoped to the outstanding search and released on every exit.
 Only one item search may run; close other screens and empty the cursor first.
+The chat screen used to enter the command is allowed.
 If an authoritative update puts an item on the cursor during a suppressed
 container interaction, the search stops and reveals that same container for
 manual recovery. It avoids automatically closing that window, because vanilla
@@ -50,3 +51,13 @@ reported as incomplete, and truncated positive counts are reported as a lower bo
 Defaults: 64-block block-search radius, further bounded by render distance; 2 ms
 and 4096 positions per tick; 20 displayed results; four ticks between interactions;
 100-tick response timeout. The settings screen exposes these limits.
+
+## Look command
+
+`/clook <x> <y> <z>` turns the local player's view toward the center of the
+specified block. Legacy `~` relative block coordinates are accepted. It does not
+move, open a container, interact, or require OP/server support. Finder results
+include a clickable `[Look]` action using the result coordinates, including item
+search container locations. Coordinate clicks still suggest `/tp`. Existing clook
+registrations are preserved with a diagnostic. This command registers independently
+of the three finder commands; clientcommands presence still suppresses those three.

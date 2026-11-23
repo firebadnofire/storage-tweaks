@@ -11,8 +11,12 @@ import org.firebadnofire.storagetweaks.inventory.*;
 import java.util.*;
 
 final class InventoryAdapter {
+    static boolean creative(GuiContainer gui) {
+        return gui.getClass()==GuiContainerCreative.class && ((GuiContainerCreative)gui).getSelectedTabIndex()==net.minecraft.creativetab.CreativeTabs.INVENTORY.getIndex();
+    }
+    static Container container(GuiContainer gui) { return creative(gui)?Minecraft.getMinecraft().player.inventoryContainer:gui.inventorySlots; }
     static boolean supported(GuiContainer gui) {
-        return gui.getClass() == GuiChest.class && gui.inventorySlots.getClass() == ContainerChest.class ||
+        return creative(gui) || gui.getClass() == GuiChest.class && gui.inventorySlots.getClass() == ContainerChest.class ||
                 gui.getClass() == GuiShulkerBox.class && gui.inventorySlots.getClass() == ContainerShulkerBox.class ||
                 gui.getClass() == GuiInventory.class && gui.inventorySlots.getClass() == ContainerPlayer.class;
     }
@@ -78,3 +82,4 @@ final class InventoryAdapter {
         return tag.getId() + ":" + tag.toString();
     }
 }
+

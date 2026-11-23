@@ -47,3 +47,9 @@ container or close/reopen sequence is used.
 
 Development runtime tests use a separate source set and test mod, excluded from
 distribution and source JARs.
+
+Creative player-tab sorting plans against the actual ContainerPlayer, never the
+creative catalogue or its wrapper slot numbers. Click dispatch temporarily selects
+that real window-0 container for vanilla prediction, restoring the visible
+container in a finally block. Tab changes stop the job. Only the main 27 slots
+participate; the creative catalogue, trash slot, equipment and hotbar are excluded.

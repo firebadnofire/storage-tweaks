@@ -115,6 +115,12 @@ public final class PunchNetwork {
         Message message=new Message(); message.type=type; message.session=session.session; message.token=session.token;
         message.enabled=Settings.serverPunch && PunchAccess.blocker().isEmpty(); channel.sendTo(message,player);
     }
+    public static void refreshCapabilities(net.minecraft.server.MinecraftServer server) {
+        for(EntityPlayerMP player:server.getPlayerList().getPlayers()) {
+            Session session=SESSIONS.get(player.getUniqueID());
+            if(session!=null && session.confirmed) offer(player,session,2);
+        }
+    }
     private static void receive(EntityPlayerMP player,Message message) {
         Session session=SESSIONS.get(player.getUniqueID());
         if(Boolean.getBoolean("storageTweaks.runtimeTest") && message.type==3)
