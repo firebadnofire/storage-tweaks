@@ -54,8 +54,13 @@ def main():
             while time.monotonic() - started < 600:
                 text = (output / 'console.log').read_text(errors='replace')
                 require(process.poll() is None, 'Server terminated unexpectedly before shutdown')
+                # Forge 1.12.2's official installer emits this unsigned-coremod
+                # warning at ERROR level before it loads any mod. It is expected
+                # for the unmodified 14.23.5.2864 server and is not a mod failure.
+                checked = text.replace('[main/ERROR] [FML]: FML appears to be missing any signature data. '
+                                       'This is not a good thing', '')
                 require(not re.search(r'Encountered an unexpected exception|Failed to load|MissingModsException|'
-                                     r'LoaderException|\bFATAL\b|\bERROR\b', text), 'Server logged a startup/runtime error')
+                                     r'LoaderException|\bFATAL\b|\bERROR\b', checked), 'Server logged a startup/runtime error')
                 if re.search(r'Done \([\d.,]+s\)!', text):
                     if ready is None:
                         ready = time.monotonic()
