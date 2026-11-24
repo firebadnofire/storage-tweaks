@@ -1,33 +1,66 @@
 # Fire's Storage Tweaks
 
-An independently implemented inventory and finder mod. The current implementation
-targets **Minecraft 1.12.2 / Forge 14.23.5.2864**. It is a development build with
-runtime-tested scenarios. The sole target is Forge 1.12.2; modpack compatibility
-is limited to the documented tests.
-See [compatibility](docs/compatibility.md) and [testing](docs/testing.md).
+**Inventory management and storage search for Minecraft 1.12.2 (Forge).**
+
+Move entire inventories, sort items, swap rows with your hotbar, find items in nearby storage, and deposit items without opening a chest.
+
+![Storage Tweaks gameplay demonstration](https://raw.githubusercontent.com/firebadnofire/storage-tweaks/HEAD/readme-assets/animation.gif)
+
+**Version:** 0.0.1 · **Minecraft:** 1.12.2 · **Forge:** 14.23.5.2864 · **Java:** 8 · **License:** AGPL-3.0-or-later
+
+[Compatibility](https://github.com/firebadnofire/storage-tweaks/blob/HEAD/docs/compatibility.md) | [Testing](https://github.com/firebadnofire/storage-tweaks/blob/HEAD/docs/testing.md) | [Finder documentation](https://github.com/firebadnofire/storage-tweaks/blob/HEAD/docs/finder.md) | [Protocol](https://github.com/firebadnofire/storage-tweaks/blob/HEAD/docs/protocol.md)
+
+This is an independently implemented development build with runtime-tested scenarios. Forge 1.12.2 is the sole target; modpack compatibility is limited to the documented tests.
 
 ## Features
 
-- Take, Store, and Sort above supported vanilla chest and shulker screens. Take
-  and Store include the hotbar; Store does not exclude tools by default.
-- Sort in the survival inventory and creative player-inventory tab consolidates and orders the main 27 slots
-  by displayed name. Hotbar, armor, offhand, and crafting slots stay untouched.
-- Row-swap buttons to the left of the survival inventory, creative player-inventory tab, and small/double chests:
-  **3** exchanges the top row with the hotbar, **2** the middle, and **1** the bottom.
-  Both rows keep their column order and exact stacks; compatible stacks do not merge.
-  Chest rows continue upward: **4-6** in a small chest, **4-9** in a double chest.
-  The hotbar has no button. Armor, offhand, crafting, and unselected rows are untouched.
-- Legal, paced inventory clicks with confirmation, state checks, and a timeout.
-  An interrupted operation preserves cursor contents; put them away normally.
-- Client-side `/cfind`, `/cfindblock`, and `/cfinditem`. Item search interacts with
-  reachable storage normally, hides intermediate screens, and shows the final
-  best matching container screen. [Exact syntax and limitations](docs/finder.md).
-- Negotiated server-authoritative punch deposit into vanilla chests and ender
-  chests, without opening their GUI. Tools and damageable equipment require a held override key, initially Left Shift.
+### Take, Store, and Sort
 
-Client inventory controls and finder commands work without a server installation.
-A server installation accepts clients without the mod. **Only punch deposit needs
-both sides.** No punch workaround runs on an unsupported server.
+Manage supported vanilla chests and shulker boxes with three dedicated buttons:
+
+- **Take:** Move container contents into your inventory, including the hotbar where applicable.
+- **Store:** Move inventory contents into the container, including the hotbar. Tools are not excluded by default.
+- **Sort:** Consolidate and organize items. In the survival inventory and creative player-inventory tab, sorting orders the main 27 slots by displayed name without touching the hotbar, armor, offhand, or crafting slots.
+
+| Take | Store | Sort |
+| :---: | :---: | :---: |
+| ![Take container contents](https://raw.githubusercontent.com/firebadnofire/storage-tweaks/HEAD/readme-assets/take.png) | ![Store inventory contents](https://raw.githubusercontent.com/firebadnofire/storage-tweaks/HEAD/readme-assets/store.png) | ![Sort container contents](https://raw.githubusercontent.com/firebadnofire/storage-tweaks/HEAD/readme-assets/sort.png) |
+
+### Swap rows with your hotbar
+
+Exchange an entire row with your hotbar using the numbered buttons beside the inventory or chest. Both rows retain their column order and exact stacks, without merging compatible stacks.
+
+| Before swapping row 9 | After swapping row 9 |
+| :---: | :---: |
+| ![Row 9 before exchange](https://raw.githubusercontent.com/firebadnofire/storage-tweaks/HEAD/readme-assets/swap-2.png) | ![Row 9 after exchange](https://raw.githubusercontent.com/firebadnofire/storage-tweaks/HEAD/readme-assets/swap-1.png) |
+
+| Rows | Location |
+| --- | --- |
+| 1–3 | Player inventory, numbered upward from the row nearest the hotbar |
+| 4–6 | Small chest or lower three rows of a double chest |
+| 7–9 | Upper three rows of a double chest |
+
+Available in survival inventory, the creative player-inventory tab, and small and double chests. The hotbar itself has no button. Armor, offhand, crafting, and unselected rows remain untouched.
+
+### Punch to deposit
+
+Deposit held items directly into vanilla chests and ender chests without opening their GUI. The feature is negotiated with the server and server-authoritative. Tools and damageable equipment require a held override key (Left Shift by default).
+
+### Find entities, blocks, and items
+
+Use client-side `/cfind`, `/cfindblock`, and `/cfinditem` to locate entities, blocks, and items in reachable storage. Item search uses normal container interactions, hides intermediate screens, and opens the container with the most matches. Your view remains unchanged during the scan and faces the best match only after it finishes.
+
+See [exact syntax and limitations](https://github.com/firebadnofire/storage-tweaks/blob/HEAD/docs/finder.md).
+
+### Multiplayer support
+
+| Feature | Client mod required | Server mod required |
+| --- | :---: | :---: |
+| Inventory controls and row swapping | Yes | No |
+| Finder commands | Yes | No |
+| Punch deposit | Yes | Yes |
+
+Servers with the mod accept unmodified clients. No punch workaround runs on unsupported servers. Inventory operations use legal, paced clicks with confirmation, state checks, and a timeout. Interrupted operations preserve cursor contents; put them away normally.
 
 ## Installation and controls
 
@@ -35,7 +68,7 @@ Install the `*-mc1.12.2-forge.jar` in the Forge instance's `mods` directory. Do 
 install the sources or runtime-test JAR. Dedicated servers use the same mod JAR.
 Java 8 is the tested runtime. Back up worlds before testing development software.
 
-Use Mods �' Storage Tweaks �' Config, or the rebindable P settings shortcut. If P is
+Use Mods → Storage Tweaks → Config, or the rebindable P settings shortcut. If P is
 already assigned, the shortcut starts unbound; assign it in Controls. A cancel
 shortcut is also available, initially unbound. Feature toggles, pacing, search
 budgets, exclusions, and capability status are available in settings. Configuration
@@ -90,7 +123,7 @@ Type, name, and tag accept `!` negation. Metadata is the legacy numeric variant.
 shows the best match after a full scan. Results provide coordinate suggestions and clickable
 cancellation. Item search requires an empty cursor and no open inventory or active
 inventory job; entering its command through chat is allowed. No OP permission or
-server mod is required. See [finder details and limits](docs/finder.md).
+server mod is required. See [finder details and limits](https://github.com/firebadnofire/storage-tweaks/blob/HEAD/docs/finder.md).
 
 ## Important limits
 
@@ -106,7 +139,7 @@ time still applies; the hover label remains server-confirmed.
 
 There is currently no third-party protection integration: additional unreviewed
 server mods disable punch conservatively. The reviewed Traveler's Backpack 1.0.35
-build is supported alongside vanilla-storage punch. See [the protocol](docs/protocol.md).
+build is supported alongside vanilla-storage punch. See [the protocol](https://github.com/firebadnofire/storage-tweaks/blob/HEAD/docs/protocol.md).
 
 Entity and block searches can reveal terrain-obscured data already sent to the
 client. Multiplayer rules may restrict their use. Searches never load distant
@@ -130,9 +163,11 @@ directory; it stops if private-display tools are unavailable.
 The development `runClient` task currently has an upstream class-merging problem;
 the private test harness uses official Forge binaries for runtime validation.
 
+## License and release process
+
 AGPL-3.0-or-later, preserving the existing project license. Reference provenance
-and actual upstream licenses are recorded in [licensing](docs/licensing.md) and
-[NOTICE](NOTICE). A pushed `v*`/`V*` tag runs the pinned Java 8 build, exact-JAR
+and actual upstream licenses are recorded in [licensing](https://github.com/firebadnofire/storage-tweaks/blob/HEAD/docs/licensing.md) and
+[NOTICE](https://github.com/firebadnofire/storage-tweaks/blob/HEAD/NOTICE). A pushed `v*`/`V*` tag runs the pinned Java 8 build, exact-JAR
 dedicated-server smoke test, GPG signing, and Forgejo release publication after
 asset-inventory and server-reported-size checks. Remote release assets are not downloaded
 by the publisher. Repository secrets `CI_KEY_B64` and `CI_KEY_PASSPHRASE` are required
@@ -142,6 +177,3 @@ the original tag-run API ID; it reuses the original tested artifacts without ret
 
 
 Version: **0.0.1**. Creator: **FireBADnoFire**.
-
-Item search leaves your view unchanged while inspecting containers. It faces the
-selected best match only after the scan finishes.
