@@ -113,5 +113,6 @@ jobs:
         run: bash scripts/ci/sign.sh
       - name: Publish a verified Forgejo release
         env:
+          GH_KEY: ${{ secrets.GH_KEY }}
           RELEASE_TOKEN: ${{ github.token }}
         run: bash scripts/ci/publish.sh

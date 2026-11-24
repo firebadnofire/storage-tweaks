@@ -37,6 +37,23 @@ class ReleaseGuardsTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             release.check_assets(api, {'id': 42}, expected)
 
+    @patch('release.subprocess.run')
+    @patch('release.subprocess.check_output')
+    @patch('release.github_request')
+    def test_github_mirror_only_fast_forwards_main(self, request, check_output, run):
+        check_output.return_value = 'ssh://git@pubcode-ssh.archuser.org:2222/firebadnofire/storage-tweaks\n'
+        request.side_effect = [
+            {'full_name': 'firebadnofire/storage-tweaks', 'private': False, 'fork': False,
+             'default_branch': 'main'},
+            {'commit': {'sha': 'a' * 40}},
+            {'sha': 'b' * 40},
+        ]
+        with patch.dict(os.environ, {'GH_KEY': 'test-token'}, clear=False):
+            release.sync_github('b' * 40)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertIn(['git', 'merge-base', '--is-ancestor', 'a' * 40, 'b' * 40], commands)
+        self.assertTrue(any(command[-1] == 'b' * 40 + ':refs/heads/main' for command in commands))
+
 
 if __name__ == '__main__':
     unittest.main()

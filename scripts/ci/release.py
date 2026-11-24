@@ -8,6 +8,7 @@ import os
 import pathlib
 import re
 import subprocess
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -23,6 +24,8 @@ SOURCE_REMOTES = {
     'https://pubcode.archuser.org/firebadnofire/storage-tweaks',
     'https://pubcode.archuser.org/firebadnofire/storage-tweaks.git',
 }
+GITHUB_API = 'https://api.github.com'
+GITHUB_REPOSITORY = 'firebadnofire/storage-tweaks'
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -56,6 +59,47 @@ class API:
 
     def repo(self, method, path='', body=None, **kwargs):
         return self.request(method, '/repos/' + REPOSITORY + path, body, **kwargs)
+
+
+def github_request(token, method, path):
+    require(token, 'Missing GH_KEY')
+    url = GITHUB_API + path
+    request = urllib.request.Request(url, method=method, headers={
+        'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
+        'User-Agent': 'StorageTweaks-CI/1.0'})
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            return json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode(errors='replace')[:1500].replace(token, '[redacted]')
+        raise RuntimeError('{} {}: HTTP {}: {}'.format(method, path, error.code, detail))
+
+
+def sync_github(commit):
+    """Fast-forward the GitHub main branch without retargeting tags."""
+    source = subprocess.check_output(['git', 'remote', 'get-url', 'origin'], text=True).strip()
+    require(source in SOURCE_REMOTES, 'Unexpected source remote')
+    require('GNU AFFERO GENERAL PUBLIC LICENSE' in pathlib.Path('LICENSE').read_text(), 'AGPL license missing')
+    token = os.environ.get('GH_KEY')
+    repo = github_request(token, 'GET', '/repos/' + GITHUB_REPOSITORY)
+    require(repo['full_name'].lower() == GITHUB_REPOSITORY and not repo['private'] and not repo.get('fork') and
+            repo.get('default_branch') == 'main', 'GitHub destination must be the intended public main repository')
+    branch = github_request(token, 'GET', '/repos/' + GITHUB_REPOSITORY + '/branches/main')
+    remote_commit = branch['commit']['sha']
+    require(re.fullmatch(r'[0-9a-f]{40}', remote_commit), 'GitHub main has an invalid commit')
+    subprocess.run(['git', 'fetch', '--no-tags', 'https://github.com/' + GITHUB_REPOSITORY + '.git', remote_commit],
+                   check=True)
+    subprocess.run(['git', 'merge-base', '--is-ancestor', remote_commit, commit], check=True)
+    with tempfile.TemporaryDirectory(prefix='storage-tweaks-github-') as temporary:
+        askpass = pathlib.Path(temporary) / 'askpass.sh'
+        askpass.write_text('#!/bin/sh\ncase "$1" in *Username*) printf "%s\\n" x-access-token ;; *) printf "%s\\n" "$GH_KEY" ;; esac\n')
+        askpass.chmod(0o700)
+        environment = dict(os.environ, GIT_ASKPASS=str(askpass), GIT_TERMINAL_PROMPT='0')
+        subprocess.run(['git', '-c', 'credential.helper=', 'push',
+                        'https://github.com/' + GITHUB_REPOSITORY + '.git', commit + ':refs/heads/main'],
+                       env=environment, check=True)
+    require(github_request(token, 'GET', '/repos/' + GITHUB_REPOSITORY + '/commits/' + commit)['sha'] == commit,
+            'GitHub source commit absent after mirror push')
 
 
 def release_tag():
@@ -116,6 +160,7 @@ def main():
     else:
         require(tagged_commit == commit == record['commit'],
                 'Release tag, checkout, and staged artifact must match')
+    sync_github(commit)
     title, body = 'Storage Tweaks ' + tag, notes(record, tag)
     release = api.repo('GET', '/releases/tags/' + urllib.parse.quote(tag, safe=''), missing=True)
     if release is None:
